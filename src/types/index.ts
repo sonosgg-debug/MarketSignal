@@ -5,7 +5,7 @@ export interface IndicatorData {
   price: number | null;
   changeAmt: number | null;
   changePercent: number | null;
-  history: number[]; // 60-day history for sparklines
+  history: { date: string; value: number }[]; // 60-day history with dates
   open: number | null;
   high: number | null;
   low: number | null;

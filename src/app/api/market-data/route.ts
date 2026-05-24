@@ -39,7 +39,10 @@ async function getFearAndGreed() {
     const changePercent = (changeAmt / prev_close) * 100;
     
     const hist = data.fear_and_greed_historical?.data || [];
-    const hist_scores = hist.map((item: any) => item.y);
+    const hist_scores = hist.map((item: any) => ({
+      date: new Date(item.x).toISOString(),
+      value: item.y
+    }));
     const history = hist_scores.slice(-60);
     
     return { score, changeAmt, changePercent, history };
@@ -94,7 +97,12 @@ export async function GET() {
           const result = (await yahooFinance.chart(item.ticker, queryOptions)) as any;
           
           if (result && result.quotes && result.quotes.length > 0) {
-            const historyClose = result.quotes.map((r: any) => r.close).filter((c: any) => c !== null);
+            const historyClose = result.quotes
+              .filter((r: any) => r.close !== null && r.date !== undefined)
+              .map((r: any) => ({
+                date: r.date.toISOString(),
+                value: r.close
+              }));
             dataRow.history = historyClose.slice(-60);
             
             const last = result.quotes[result.quotes.length - 1];

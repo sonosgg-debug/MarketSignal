@@ -79,7 +79,11 @@ export function IndicatorCard({ data }: Props) {
     }
   }
 
-  const chartData = history.map((val, i) => ({ value: val, index: i }));
+  const chartData = history.map((item, i) => {
+    const d = new Date(item.date);
+    const dateStr = `${d.getMonth() + 1}/${d.getDate()}`;
+    return { value: item.value, date: dateStr };
+  });
   const strokeColor = isOdd ? "#eab308" : "#94a3b8"; // Yellow for odd, Slate for even
 
   if (isLinkOnly) {
@@ -146,8 +150,13 @@ export function IndicatorCard({ data }: Props) {
                 <Tooltip 
                   contentStyle={{ backgroundColor: 'rgba(24,24,27,0.9)', border: '1px solid #3f3f46', borderRadius: '6px', fontSize: '12px' }}
                   itemStyle={{ color: '#fafafa' }}
-                  labelStyle={{ display: 'none' }}
-                  formatter={(value: number) => [value.toLocaleString(undefined, { minimumFractionDigits: 2 }), "Value"]}
+                  labelStyle={{ color: '#a1a1aa', marginBottom: '4px', fontSize: '11px' }}
+                  formatter={(value: any) => {
+                    if (typeof value === 'number') return [value.toLocaleString(undefined, { minimumFractionDigits: 2 }), ""];
+                    return [value, ""];
+                  }}
+                  labelFormatter={(label) => label}
+                  separator=""
                   cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1 }}
                 />
                 <Line
