@@ -121,12 +121,6 @@ export function IndicatorCard({ data, displayIndex }: Props) {
         <h3 className="font-medium text-muted-foreground text-sm pr-4 line-clamp-2 leading-tight">
           {displayName}
         </h3>
-        {changePercent !== null && (
-          <div className={`flex items-center px-2 py-1 rounded-full text-xs font-semibold ${badgeBg} whitespace-nowrap`}>
-            {icon}
-            {formattedPercent}
-          </div>
-        )}
       </div>
 
       <div className="mt-2 z-10 relative flex justify-between items-end">
@@ -140,9 +134,13 @@ export function IndicatorCard({ data, displayIndex }: Props) {
               </div>
             )}
           </div>
-          <div className={`text-sm mt-1 font-medium ${valueColor}`}>
-            {isPositive ? "+" : isNegative ? "-" : ""}
-            {formattedChange}
+          <div className={`flex items-center text-sm mt-1 font-medium ${valueColor}`}>
+            {icon}
+            <span>
+              {isPositive ? "+" : isNegative ? "-" : ""}
+              {formattedChange}
+              {changePercent !== null && ` (${isPositive ? "+" : isNegative ? "-" : ""}${formattedPercent})`}
+            </span>
           </div>
         </div>
         
