@@ -149,7 +149,15 @@ export function IndicatorCard({ data }: Props) {
                 <XAxis dataKey="date" hide />
                 <YAxis domain={["dataMin", "dataMax"]} hide />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: 'rgba(24,24,27,0.9)', border: '1px solid #3f3f46', borderRadius: '6px', fontSize: '12px' }}
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(24,24,27,0.4)', 
+                    backdropFilter: 'blur(4px)',
+                    WebkitBackdropFilter: 'blur(4px)',
+                    border: '1px solid rgba(63,63,70,0.5)', 
+                    borderRadius: '6px', 
+                    fontSize: '12px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                  }}
                   itemStyle={{ color: '#fafafa' }}
                   labelStyle={{ color: '#a1a1aa', marginBottom: '4px', fontSize: '11px' }}
                   formatter={(value: any) => {
