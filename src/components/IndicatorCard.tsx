@@ -1,7 +1,7 @@
 "use client";
 
 import { IndicatorData } from "@/types";
-import { LineChart, Line, ResponsiveContainer, YAxis, Tooltip } from "recharts";
+import { LineChart, Line, ResponsiveContainer, YAxis, Tooltip, XAxis } from "recharts";
 import { ArrowUpRight, ArrowDownRight, ExternalLink } from "lucide-react";
 
 interface Props {
@@ -146,6 +146,7 @@ export function IndicatorCard({ data }: Props) {
           {history.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData}>
+                <XAxis dataKey="date" hide />
                 <YAxis domain={["dataMin", "dataMax"]} hide />
                 <Tooltip 
                   contentStyle={{ backgroundColor: 'rgba(24,24,27,0.9)', border: '1px solid #3f3f46', borderRadius: '6px', fontSize: '12px' }}
