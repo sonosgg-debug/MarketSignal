@@ -131,8 +131,8 @@ export function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
-          {filteredData.map((item) => (
-            <IndicatorCard key={item.id} data={item} />
+          {filteredData.map((item, index) => (
+            <IndicatorCard key={item.id} data={item} displayIndex={index + 1} />
           ))}
           {filteredData.length === 0 && (
             <div className="col-span-full glass p-8 text-center text-muted-foreground rounded-xl">

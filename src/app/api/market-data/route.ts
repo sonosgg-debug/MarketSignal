@@ -67,7 +67,7 @@ export async function GET() {
       const isOdd = parseInt(item.id, 10) % 2 !== 0;
       let dataRow: IndicatorData = {
         id: item.id,
-        name: `${item.id}. ${item.name}`,
+        name: item.name,
         ticker: item.ticker,
         price: null,
         changeAmt: null,

@@ -6,6 +6,7 @@ import { ArrowUpRight, ArrowDownRight, ExternalLink } from "lucide-react";
 
 interface Props {
   data: IndicatorData;
+  displayIndex?: number;
 }
 
 // 미니 일봉 캔들 컴포넌트
@@ -34,7 +35,7 @@ function DailyCandle({ o, h, l, c }: { o: number; h: number; l: number; c: numbe
   );
 }
 
-export function IndicatorCard({ data }: Props) {
+export function IndicatorCard({ data, displayIndex }: Props) {
   const {
     name,
     price,
@@ -53,6 +54,8 @@ export function IndicatorCard({ data }: Props) {
 
   const isPositive = changeAmt !== null && changeAmt > 0;
   const isNegative = changeAmt !== null && changeAmt < 0;
+
+  const displayName = displayIndex !== undefined ? `${String(displayIndex).padStart(2, '0')}. ${name}` : name;
 
   // Determine colors based on favorable conditions
   let valueColor = "text-foreground";
@@ -84,7 +87,9 @@ export function IndicatorCard({ data }: Props) {
     const dateStr = `${d.getMonth() + 1}/${d.getDate()}`;
     return { value: item.value, date: dateStr };
   });
-  const strokeColor = isOdd ? "#eab308" : "#94a3b8"; // Yellow for odd, Slate for even
+  
+  const isItemOdd = displayIndex !== undefined ? displayIndex % 2 !== 0 : isOdd;
+  const strokeColor = isItemOdd ? "#eab308" : "#94a3b8"; // Yellow for odd, Slate for even
 
   if (isLinkOnly) {
     return (
@@ -95,7 +100,7 @@ export function IndicatorCard({ data }: Props) {
         className="glass rounded-xl p-5 flex flex-col justify-between hover:bg-card/80 transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-black/50 group cursor-pointer h-full min-h-[160px]"
       >
         <div className="flex justify-between items-start">
-          <h3 className="font-medium text-muted-foreground text-sm line-clamp-2 pr-2">{name}</h3>
+          <h3 className="font-medium text-muted-foreground text-sm line-clamp-2 pr-2">{displayName}</h3>
           <ExternalLink className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
         </div>
         <div className="mt-4">
@@ -114,7 +119,7 @@ export function IndicatorCard({ data }: Props) {
     <div className="glass rounded-xl p-5 flex flex-col justify-between hover:bg-card/80 transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-black/50 relative overflow-hidden group min-h-[160px]">
       <div className="flex justify-between items-start mb-2 z-10 relative">
         <h3 className="font-medium text-muted-foreground text-sm pr-4 line-clamp-2 leading-tight">
-          {name}
+          {displayName}
         </h3>
         {changePercent !== null && (
           <div className={`flex items-center px-2 py-1 rounded-full text-xs font-semibold ${badgeBg} whitespace-nowrap`}>
