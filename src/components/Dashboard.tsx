@@ -69,7 +69,7 @@ export function Dashboard() {
 
   // 필터링 로직
   const filteredData = data.filter((item) => {
-    const isKMarket = item.ticker === "KOSPI200_NIGHT" || item.ticker === "ADR_INFO";
+    const isKMarket = item.ticker === "KOSPI200_NIGHT" || item.ticker === "ADR_INFO" || item.ticker === "CDS_KOREA";
     
     if (selectedCategory === "US Market") {
       return !isKMarket;
