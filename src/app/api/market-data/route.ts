@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import yahooFinance from 'yahoo-finance2';
+import YahooFinance from 'yahoo-finance2';
+const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey', 'ripHistorical'] });
 import { IndicatorData } from '@/types';
 
 const TICKERS = [
@@ -90,21 +91,21 @@ export async function GET() {
       } else {
         try {
           const queryOptions = { period1: startDate, period2: endDate, interval: '1d' as const };
-          const result = (await yahooFinance.historical(item.ticker, queryOptions)) as any[];
+          const result = (await yahooFinance.chart(item.ticker, queryOptions)) as any;
           
-          if (result && result.length > 0) {
-            const historyClose = result.map(r => r.close);
+          if (result && result.quotes && result.quotes.length > 0) {
+            const historyClose = result.quotes.map((r: any) => r.close).filter((c: any) => c !== null);
             dataRow.history = historyClose.slice(-60);
             
-            const last = result[result.length - 1];
+            const last = result.quotes[result.quotes.length - 1];
             dataRow.price = last.close;
             dataRow.open = last.open;
             dataRow.high = last.high;
             dataRow.low = last.low;
             dataRow.close = last.close;
 
-            if (result.length >= 2) {
-              const prev = result[result.length - 2];
+            if (result.quotes.length >= 2) {
+              const prev = result.quotes[result.quotes.length - 2];
               dataRow.changeAmt = last.close - prev.close;
               dataRow.changePercent = (dataRow.changeAmt / prev.close) * 100;
             } else {
