@@ -1,11 +1,37 @@
 "use client";
 
 import { IndicatorData } from "@/types";
-import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
+import { LineChart, Line, ResponsiveContainer, YAxis, Tooltip } from "recharts";
 import { ArrowUpRight, ArrowDownRight, ExternalLink } from "lucide-react";
 
 interface Props {
   data: IndicatorData;
+}
+
+// 미니 일봉 캔들 컴포넌트
+function DailyCandle({ o, h, l, c }: { o: number; h: number; l: number; c: number }) {
+  const isRise = c >= o;
+  const colorClass = isRise ? "bg-red-500" : "bg-blue-500"; // 한국식: 상승(Red), 하락(Blue)
+  
+  // 상대적 비율 계산을 위해 최댓값, 최솟값 범위를 구합니다.
+  const range = h - l || 1; // 0 나누기 방지
+  const heightPx = 32; // 캔들의 전체 높이 픽셀
+  const scale = heightPx / range;
+
+  const topY = (h - Math.max(o, c)) * scale;
+  const bottomY = (Math.min(o, c) - l) * scale;
+  const bodyHeight = Math.max(Math.abs(c - o) * scale, 2); // 최소 2px 두께
+
+  return (
+    <div className="flex flex-col items-center justify-center w-6 h-[32px] relative" title={`O:${o.toFixed(2)} H:${h.toFixed(2)} L:${l.toFixed(2)} C:${c.toFixed(2)}`}>
+      {/* 윗꼬리 */}
+      <div className={`w-[2px] ${colorClass}`} style={{ height: topY }} />
+      {/* 몸통 */}
+      <div className={`w-full ${colorClass}`} style={{ height: bodyHeight }} />
+      {/* 아랫꼬리 */}
+      <div className={`w-[2px] ${colorClass}`} style={{ height: bottomY }} />
+    </div>
+  );
 }
 
 export function IndicatorCard({ data }: Props) {
@@ -15,6 +41,10 @@ export function IndicatorCard({ data }: Props) {
     changeAmt,
     changePercent,
     history,
+    open,
+    high,
+    low,
+    close,
     isNegativeFavorable,
     isOdd,
     isLinkOnly,
@@ -92,7 +122,15 @@ export function IndicatorCard({ data }: Props) {
 
       <div className="mt-2 z-10 relative flex justify-between items-end">
         <div>
-          <div className="text-2xl font-bold tracking-tight">{formattedPrice}</div>
+          <div className="flex items-center gap-2">
+            <div className="text-2xl font-bold tracking-tight">{formattedPrice}</div>
+            {/* 일봉 캔들 표시 */}
+            {open !== null && high !== null && low !== null && close !== null && (
+              <div className="ml-1 opacity-90">
+                <DailyCandle o={open} h={high} l={low} c={close} />
+              </div>
+            )}
+          </div>
           <div className={`text-sm mt-1 font-medium ${valueColor}`}>
             {isPositive ? "+" : isNegative ? "-" : ""}
             {formattedChange}
@@ -100,11 +138,18 @@ export function IndicatorCard({ data }: Props) {
         </div>
         
         {/* Sparkline */}
-        <div className="w-24 h-12 opacity-80 group-hover:opacity-100 transition-opacity">
+        <div className="w-24 h-12 opacity-80 group-hover:opacity-100 transition-opacity relative z-20">
           {history.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData}>
                 <YAxis domain={["dataMin", "dataMax"]} hide />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: 'rgba(24,24,27,0.9)', border: '1px solid #3f3f46', borderRadius: '6px', fontSize: '12px' }}
+                  itemStyle={{ color: '#fafafa' }}
+                  labelStyle={{ display: 'none' }}
+                  formatter={(value: number) => [value.toLocaleString(undefined, { minimumFractionDigits: 2 }), "Value"]}
+                  cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1 }}
+                />
                 <Line
                   type="monotone"
                   dataKey="value"
