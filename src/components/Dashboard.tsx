@@ -69,10 +69,12 @@ export function Dashboard() {
 
   // 필터링 로직
   const filteredData = data.filter((item) => {
+    const isKMarket = item.ticker === "KOSPI200_NIGHT" || item.ticker === "ADR_INFO";
+    
     if (selectedCategory === "US Market") {
-      return item.ticker !== "KOSPI200_NIGHT";
+      return !isKMarket;
     } else if (selectedCategory === "K Market") {
-      return item.ticker === "KOSPI200_NIGHT";
+      return isKMarket;
     }
     return true;
   });

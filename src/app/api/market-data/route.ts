@@ -20,6 +20,7 @@ const TICKERS = [
   { id: '14', name: 'CBOE VIX', ticker: '^VIX', negativeFavorable: true },
   { id: '15', name: 'CNN Fear & Greed Index', ticker: 'FEAR_GREED' },
   { id: '16', name: 'KOSPI200 야간 선물 지수', ticker: 'KOSPI200_NIGHT', negativeFavorable: true },
+  { id: '17', name: 'ADR 지표', ticker: 'ADR_INFO' },
 ];
 
 async function getFearAndGreed() {
@@ -64,7 +65,6 @@ export async function GET() {
     startDate.setMonth(startDate.getMonth() - 3);
 
     for (const item of TICKERS) {
-      const isOdd = parseInt(item.id, 10) % 2 !== 0;
       let dataRow: IndicatorData = {
         id: item.id,
         name: item.name,
@@ -78,12 +78,15 @@ export async function GET() {
         low: null,
         close: null,
         isNegativeFavorable: !!item.negativeFavorable,
-        isOdd
+        isOdd: false // calculated dynamically on frontend
       };
 
       if (item.ticker === 'KOSPI200_NIGHT') {
         dataRow.isLinkOnly = true;
         dataRow.linkUrl = 'https://esignal.co.kr/kospi200-futures-night/';
+      } else if (item.ticker === 'ADR_INFO') {
+        dataRow.isLinkOnly = true;
+        dataRow.linkUrl = 'http://adrinfo.kr/';
       } else if (item.ticker === 'FEAR_GREED') {
         if (fgData) {
           dataRow.price = fgData.score;
