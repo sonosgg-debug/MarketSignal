@@ -97,31 +97,33 @@ export async function GET() {
           const result = (await yahooFinance.chart(item.ticker, queryOptions)) as any;
           
           if (result && result.quotes && result.quotes.length > 0) {
-            const historyClose = result.quotes
-              .filter((r: any) => r.close !== null && r.date !== undefined)
-              .map((r: any) => ({
+            const validQuotes = result.quotes.filter((r: any) => r.close !== null && r.date !== undefined);
+            
+            if (validQuotes.length > 0) {
+              const historyClose = validQuotes.map((r: any) => ({
                 date: r.date.toISOString(),
                 value: r.close
               }));
-            dataRow.history = historyClose.slice(-60);
-            
-            const last = result.quotes[result.quotes.length - 1];
-            dataRow.price = last.close;
-            dataRow.open = last.open;
-            dataRow.high = last.high;
-            dataRow.low = last.low;
-            dataRow.close = last.close;
+              dataRow.history = historyClose.slice(-60);
+              
+              const last = validQuotes[validQuotes.length - 1];
+              dataRow.price = last.close;
+              dataRow.open = last.open;
+              dataRow.high = last.high;
+              dataRow.low = last.low;
+              dataRow.close = last.close;
 
-            if (result.quotes.length >= 2) {
-              const prev = result.quotes[result.quotes.length - 2];
-              dataRow.changeAmt = last.close - prev.close;
-              dataRow.changePercent = (dataRow.changeAmt / prev.close) * 100;
-            } else {
-              // Try to get quote if historical only has 1
-              const quote = (await yahooFinance.quote(item.ticker)) as any;
-              if (quote && quote.regularMarketPreviousClose) {
-                dataRow.changeAmt = last.close - quote.regularMarketPreviousClose;
-                dataRow.changePercent = (dataRow.changeAmt / quote.regularMarketPreviousClose) * 100;
+              if (validQuotes.length >= 2) {
+                const prev = validQuotes[validQuotes.length - 2];
+                dataRow.changeAmt = last.close - prev.close;
+                dataRow.changePercent = (dataRow.changeAmt / prev.close) * 100;
+              } else {
+                // Try to get quote if historical only has 1
+                const quote = (await yahooFinance.quote(item.ticker)) as any;
+                if (quote && quote.regularMarketPreviousClose) {
+                  dataRow.changeAmt = last.close - quote.regularMarketPreviousClose;
+                  dataRow.changePercent = (dataRow.changeAmt / quote.regularMarketPreviousClose) * 100;
+                }
               }
             }
           } else {
