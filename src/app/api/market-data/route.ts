@@ -22,6 +22,7 @@ const TICKERS = [
   { id: '16', name: 'KOSPI200 야간 선물 지수', ticker: 'KOSPI200_NIGHT', negativeFavorable: true },
   { id: '17', name: 'ADR 지표', ticker: 'ADR_INFO' },
   { id: '18', name: 'CDS 5Y Korea', ticker: 'CDS_KOREA' },
+  { id: '19', name: '외환보유액', ticker: 'FX_RESERVES' },
 ];
 
 async function getFearAndGreed() {
@@ -91,6 +92,9 @@ export async function GET() {
       } else if (item.ticker === 'CDS_KOREA') {
         dataRow.isLinkOnly = true;
         dataRow.linkUrl = 'https://www.indexergo.com/series/?detailId=09201&frq=D';
+      } else if (item.ticker === 'FX_RESERVES') {
+        dataRow.isLinkOnly = true;
+        dataRow.linkUrl = 'https://www.indexergo.com/series/?detailId=12501&frq=M';
       } else if (item.ticker === 'FEAR_GREED') {
         if (fgData) {
           dataRow.price = fgData.score;
