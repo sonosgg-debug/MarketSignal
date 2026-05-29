@@ -219,11 +219,25 @@ export async function GET() {
         }
       } else {
         try {
+          // Fetch quote first for the latest real-time stats
+          let quote: any = null;
+          try {
+            quote = (await yahooFinance.quote(item.ticker)) as any;
+          } catch (quoteErr) {
+            console.error(`Error fetching quote for ${item.ticker}:`, quoteErr);
+          }
+
           const queryOptions = { period1: startDate, period2: endDate, interval: '1d' as const };
           const result = (await yahooFinance.chart(item.ticker, queryOptions)) as any;
           
           if (result && result.quotes && result.quotes.length > 0) {
-            const validQuotes = result.quotes.filter((r: any) => r.close !== null && r.date !== undefined);
+            // Map the quotes to history, but if the close is null and it's the last element, patch it with the quote price!
+            const validQuotes = result.quotes.map((r: any, idx: number) => {
+              if (r.close === null && idx === result.quotes.length - 1 && quote && quote.regularMarketPrice) {
+                return { ...r, close: quote.regularMarketPrice };
+              }
+              return r;
+            }).filter((r: any) => r.close !== null && r.date !== undefined);
             
             if (validQuotes.length > 0) {
               const historyClose = validQuotes.map((r: any) => ({
@@ -233,37 +247,50 @@ export async function GET() {
               dataRow.history = historyClose.slice(-60);
               
               const last = validQuotes[validQuotes.length - 1];
-              dataRow.price = last.close;
-              dataRow.open = last.open;
-              dataRow.high = last.high;
-              dataRow.low = last.low;
-              dataRow.close = last.close;
-
-              if (validQuotes.length >= 2) {
-                const prev = validQuotes[validQuotes.length - 2];
-                dataRow.changeAmt = last.close - prev.close;
-                dataRow.changePercent = (dataRow.changeAmt / prev.close) * 100;
+              
+              if (quote) {
+                dataRow.price = quote.regularMarketPrice ?? last.close;
+                dataRow.open = quote.regularMarketOpen ?? last.open;
+                dataRow.high = quote.regularMarketDayHigh ?? last.high;
+                dataRow.low = quote.regularMarketDayLow ?? last.low;
+                dataRow.close = quote.regularMarketPrice ?? last.close;
+                if (quote.regularMarketChange !== undefined) {
+                  dataRow.changeAmt = quote.regularMarketChange;
+                  dataRow.changePercent = quote.regularMarketChangePercent;
+                } else if (validQuotes.length >= 2) {
+                  const prev = validQuotes[validQuotes.length - 2];
+                  if (dataRow.price !== null && prev.close !== null) {
+                    dataRow.changeAmt = dataRow.price - prev.close;
+                    dataRow.changePercent = (dataRow.changeAmt / prev.close) * 100;
+                  }
+                }
               } else {
-                // Try to get quote if historical only has 1
-                const quote = (await yahooFinance.quote(item.ticker)) as any;
-                if (quote && quote.regularMarketPreviousClose) {
-                  dataRow.changeAmt = last.close - quote.regularMarketPreviousClose;
-                  dataRow.changePercent = (dataRow.changeAmt / quote.regularMarketPreviousClose) * 100;
+                dataRow.price = last.close;
+                dataRow.open = last.open;
+                dataRow.high = last.high;
+                dataRow.low = last.low;
+                dataRow.close = last.close;
+                if (validQuotes.length >= 2) {
+                  const prev = validQuotes[validQuotes.length - 2];
+                  if (last.close !== null && prev.close !== null) {
+                    dataRow.changeAmt = last.close - prev.close;
+                    dataRow.changePercent = (dataRow.changeAmt / prev.close) * 100;
+                  }
                 }
               }
             }
           } else {
-             // Fallback to quote
-             const quote = (await yahooFinance.quote(item.ticker)) as any;
-             if (quote && quote.regularMarketPrice) {
-               dataRow.price = quote.regularMarketPrice;
-               dataRow.open = quote.regularMarketOpen || null;
-               dataRow.high = quote.regularMarketDayHigh || null;
-               dataRow.low = quote.regularMarketDayLow || null;
-               dataRow.close = quote.regularMarketPrice;
-               if (quote.regularMarketPreviousClose) {
-                 dataRow.changeAmt = quote.regularMarketPrice - quote.regularMarketPreviousClose;
-                 dataRow.changePercent = quote.regularMarketChangePercent || ((dataRow.changeAmt / quote.regularMarketPreviousClose) * 100);
+             // Fallback to quote alone
+             const activeQuote = quote || (await yahooFinance.quote(item.ticker)) as any;
+             if (activeQuote && activeQuote.regularMarketPrice) {
+               dataRow.price = activeQuote.regularMarketPrice;
+               dataRow.open = activeQuote.regularMarketOpen || null;
+               dataRow.high = activeQuote.regularMarketDayHigh || null;
+               dataRow.low = activeQuote.regularMarketDayLow || null;
+               dataRow.close = activeQuote.regularMarketPrice;
+               if (activeQuote.regularMarketPreviousClose) {
+                 dataRow.changeAmt = activeQuote.regularMarketPrice - activeQuote.regularMarketPreviousClose;
+                 dataRow.changePercent = activeQuote.regularMarketChangePercent || ((dataRow.changeAmt / activeQuote.regularMarketPreviousClose) * 100);
                }
              }
           }
