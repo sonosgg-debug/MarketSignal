@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import YahooFinance from 'yahoo-finance2';
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey', 'ripHistorical'] });
 import { IndicatorData } from '@/types';
+import path from 'path';
+import fs from 'fs';
+import { execSync, exec } from 'child_process';
 
 const TICKERS = [
   { id: '01', name: '미국 S&P 500 지수', ticker: '^GSPC' },
@@ -19,10 +22,14 @@ const TICKERS = [
   { id: '13', name: '비트코인(BTC-USD) 가격', ticker: 'BTC-USD' },
   { id: '14', name: 'CBOE VIX', ticker: '^VIX', negativeFavorable: true },
   { id: '15', name: 'CNN Fear & Greed Index', ticker: 'FEAR_GREED' },
-  { id: '16', name: 'KOSPI200 야간 선물 지수', ticker: 'KOSPI200_NIGHT', negativeFavorable: true },
-  { id: '17', name: 'ADR 지표', ticker: 'ADR_INFO' },
-  { id: '18', name: 'CDS 5Y Korea', ticker: 'CDS_KOREA' },
-  { id: '19', name: '외환보유액', ticker: 'FX_RESERVES' },
+  { id: '16', name: 'KOSPI 지수', ticker: '^KS11' },
+  { id: '17', name: 'KOSDAQ 지수', ticker: '^KQ11' },
+  { id: '18', name: 'KOSPI PER', ticker: 'KOSPI_PER' },
+  { id: '19', name: 'KOSPI PBR', ticker: 'KOSPI_PBR' },
+  { id: '20', name: 'KOSPI200 야간 선물 지수', ticker: 'KOSPI200_NIGHT', negativeFavorable: true },
+  { id: '21', name: 'ADR 지표', ticker: 'ADR_INFO' },
+  { id: '22', name: 'CDS 5Y Korea', ticker: 'CDS_KOREA' },
+  { id: '23', name: '외환보유액', ticker: 'FX_RESERVES' },
 ];
 
 async function getFearAndGreed() {
@@ -61,6 +68,43 @@ export async function GET() {
     
     // Fear and greed
     const fgData = await getFearAndGreed();
+
+    // Fetch KRX data from cache immediately (for ultra-fast response)
+    let krxData: any = null;
+    const scriptPath = path.join(process.cwd(), 'src/app/api/market-data/get_kospi_fundamentals.py');
+    const cachePath = path.join(process.cwd(), 'src/app/api/market-data/krx_cache.json');
+
+    try {
+      if (fs.existsSync(cachePath)) {
+        const cacheContent = fs.readFileSync(cachePath, 'utf-8');
+        krxData = JSON.parse(cacheContent);
+      }
+    } catch (cacheErr) {
+      console.error("Error reading KRX cache:", cacheErr);
+    }
+
+    // Trigger asynchronous background update to keep the cache fresh for next time
+    try {
+      exec(`python "${scriptPath}"`, (error, stdout, stderr) => {
+        if (!error && stdout) {
+          try {
+            const parsed = JSON.parse(stdout);
+            if (parsed && !parsed.error) {
+              fs.writeFileSync(cachePath, JSON.stringify(parsed, null, 2), 'utf-8');
+              console.log("KRX cache updated successfully in background.");
+            } else if (parsed && parsed.error) {
+              console.error("KRX background update script returned error:", parsed.error);
+            }
+          } catch (e) {
+            // Ignore parse errors from background refresh
+          }
+        } else if (error) {
+          console.error("Failed to execute KRX background update:", error);
+        }
+      });
+    } catch (bgErr) {
+      console.error("Failed to start background KRX update:", bgErr);
+    }
 
     const endDate = new Date();
     const startDate = new Date();
@@ -101,6 +145,20 @@ export async function GET() {
           dataRow.changeAmt = fgData.changeAmt;
           dataRow.changePercent = fgData.changePercent;
           dataRow.history = fgData.history;
+        }
+      } else if (item.ticker === 'KOSPI_PER') {
+        if (krxData && krxData.per) {
+          dataRow.price = krxData.per.price;
+          dataRow.changeAmt = krxData.per.changeAmt;
+          dataRow.changePercent = krxData.per.changePercent;
+          dataRow.history = krxData.per.history;
+        }
+      } else if (item.ticker === 'KOSPI_PBR') {
+        if (krxData && krxData.pbr) {
+          dataRow.price = krxData.pbr.price;
+          dataRow.changeAmt = krxData.pbr.changeAmt;
+          dataRow.changePercent = krxData.pbr.changePercent;
+          dataRow.history = krxData.pbr.history;
         }
       } else {
         try {
