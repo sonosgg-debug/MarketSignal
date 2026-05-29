@@ -79,6 +79,13 @@ def main():
             }
         }
         
+        # Determine paths and save to cache directly from Python
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        cache_path = os.path.join(script_dir, 'krx_cache.json')
+        
+        with open(cache_path, 'w', encoding='utf-8') as f:
+            json.dump(result, f, indent=2, ensure_ascii=False)
+            
         print(json.dumps(result, ensure_ascii=False))
         
     except Exception as e:

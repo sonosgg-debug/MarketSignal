@@ -88,12 +88,17 @@ export async function GET() {
       exec(`python "${scriptPath}"`, (error, stdout, stderr) => {
         if (!error && stdout) {
           try {
-            const parsed = JSON.parse(stdout);
-            if (parsed && !parsed.error) {
-              fs.writeFileSync(cachePath, JSON.stringify(parsed, null, 2), 'utf-8');
-              console.log("KRX cache updated successfully in background.");
-            } else if (parsed && parsed.error) {
-              console.error("KRX background update script returned error:", parsed.error);
+            const jsonStart = stdout.indexOf('{');
+            if (jsonStart !== -1) {
+              const parsed = JSON.parse(stdout.substring(jsonStart));
+              if (parsed && !parsed.error) {
+                fs.writeFileSync(cachePath, JSON.stringify(parsed, null, 2), 'utf-8');
+                console.log("KRX cache updated successfully in background.");
+              } else if (parsed && parsed.error) {
+                console.error("KRX background update script returned error:", parsed.error);
+              }
+            } else {
+              console.error("KRX background update did not output valid JSON:", stdout);
             }
           } catch (e) {
             // Ignore parse errors from background refresh
@@ -125,11 +130,16 @@ export async function GET() {
       exec(`python "${wtiScriptPath}"`, (error, stdout, stderr) => {
         if (!error && stdout) {
           try {
-            const parsed = JSON.parse(stdout);
-            if (parsed && parsed.success) {
-              console.log("WTI cache updated successfully in background.");
-            } else if (parsed && parsed.error) {
-              console.error("WTI background update script returned error:", parsed.error);
+            const jsonStart = stdout.indexOf('{');
+            if (jsonStart !== -1) {
+              const parsed = JSON.parse(stdout.substring(jsonStart));
+              if (parsed && parsed.success) {
+                console.log("WTI cache updated successfully in background.");
+              } else if (parsed && parsed.error) {
+                console.error("WTI background update script returned error:", parsed.error);
+              }
+            } else {
+              console.error("WTI background update did not output valid JSON:", stdout);
             }
           } catch (e) {
             // Ignore parse errors
