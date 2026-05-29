@@ -10,7 +10,7 @@ const TICKERS = [
   { id: '01', name: '미국 S&P 500 지수', ticker: '^GSPC' },
   { id: '02', name: '미국 나스닥 지수', ticker: '^IXIC' },
   { id: '03', name: '미국 국채 10년물 금리(TNX)', ticker: '^TNX', negativeFavorable: true },
-  { id: '04', name: 'Crude Oil WTI (CME Globex)', ticker: 'CL=F', negativeFavorable: true },
+  { id: '04', name: 'Crude Oil WTI (NYMEX)', ticker: 'CL=F', negativeFavorable: true },
   { id: '05', name: '미국 달러 지수(USD Index)', ticker: 'DX-Y.NYB', negativeFavorable: true },
   { id: '06', name: 'USD/KRW 환율', ticker: 'KRW=X', negativeFavorable: true },
   { id: '07', name: '필라델피아 반도체 지수(SOX)', ticker: '^SOX' },
@@ -106,6 +106,42 @@ export async function GET() {
       console.error("Failed to start background KRX update:", bgErr);
     }
 
+    // Fetch WTI data from cache immediately (for ultra-fast response)
+    let wtiData: any = null;
+    const wtiScriptPath = path.join(process.cwd(), 'src/app/api/market-data/get_wti_crude_oil.py');
+    const wtiCachePath = path.join(process.cwd(), 'src/app/api/market-data/wti_cache.json');
+
+    try {
+      if (fs.existsSync(wtiCachePath)) {
+        const cacheContent = fs.readFileSync(wtiCachePath, 'utf-8');
+        wtiData = JSON.parse(cacheContent);
+      }
+    } catch (wtiErr) {
+      console.error("Error reading WTI cache:", wtiErr);
+    }
+
+    // Trigger asynchronous background update to keep the WTI cache fresh
+    try {
+      exec(`python "${wtiScriptPath}"`, (error, stdout, stderr) => {
+        if (!error && stdout) {
+          try {
+            const parsed = JSON.parse(stdout);
+            if (parsed && parsed.success) {
+              console.log("WTI cache updated successfully in background.");
+            } else if (parsed && parsed.error) {
+              console.error("WTI background update script returned error:", parsed.error);
+            }
+          } catch (e) {
+            // Ignore parse errors
+          }
+        } else if (error) {
+          console.error("Failed to execute WTI background update:", error);
+        }
+      });
+    } catch (bgErr) {
+      console.error("Failed to start background WTI update:", bgErr);
+    }
+
     const endDate = new Date();
     const startDate = new Date();
     startDate.setMonth(startDate.getMonth() - 3);
@@ -159,6 +195,17 @@ export async function GET() {
           dataRow.changeAmt = krxData.pbr.changeAmt;
           dataRow.changePercent = krxData.pbr.changePercent;
           dataRow.history = krxData.pbr.history;
+        }
+      } else if (item.ticker === 'CL=F') {
+        if (wtiData) {
+          dataRow.price = wtiData.price;
+          dataRow.open = wtiData.open;
+          dataRow.high = wtiData.high;
+          dataRow.low = wtiData.low;
+          dataRow.close = wtiData.close;
+          dataRow.changeAmt = wtiData.changeAmt;
+          dataRow.changePercent = wtiData.changePercent;
+          dataRow.history = wtiData.history;
         }
       } else {
         try {
