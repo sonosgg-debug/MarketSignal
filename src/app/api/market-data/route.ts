@@ -30,7 +30,7 @@ const TICKERS = [
   { id: '21', name: '고객예탁금 (단위:억원)', ticker: 'CUSTOMER_DEPOSITS' },
   { id: '22', name: '신용공여 잔고 (단위:억원)', ticker: 'CREDIT_BALANCE' },
   { id: '23', name: '반대매매금액 (단위:억원)', ticker: 'MARGIN_CALL', negativeFavorable: true },
-  { id: '24', name: 'KOSPI200 야간 선물 지수', ticker: 'KOSPI200_NIGHT', negativeFavorable: true },
+  { id: '24', name: 'KOSPI200 야간 선물 지수', ticker: 'KOSPI200_NIGHT' },
   { id: '25', name: 'KOSPI ADR(20, %)', ticker: 'ADR_INFO' },
   { id: '26', name: 'CDS 5Y Korea', ticker: 'CDS_KOREA' },
   { id: '27', name: '외환보유액', ticker: 'FX_RESERVES' },
