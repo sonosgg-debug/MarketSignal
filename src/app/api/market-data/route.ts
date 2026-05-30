@@ -26,10 +26,14 @@ const TICKERS = [
   { id: '17', name: 'KOSDAQ 지수', ticker: '^KQ11' },
   { id: '18', name: 'KOSPI PER', ticker: 'KOSPI_PER' },
   { id: '19', name: 'KOSPI PBR', ticker: 'KOSPI_PBR' },
-  { id: '20', name: 'KOSPI200 야간 선물 지수', ticker: 'KOSPI200_NIGHT', negativeFavorable: true },
-  { id: '21', name: 'ADR 지표', ticker: 'ADR_INFO' },
-  { id: '22', name: 'CDS 5Y Korea', ticker: 'CDS_KOREA' },
-  { id: '23', name: '외환보유액', ticker: 'FX_RESERVES' },
+  { id: '20', name: 'KOSPI 거래대금 (단위:억원)', ticker: 'KOSPI_TRADE_VALUE' },
+  { id: '21', name: '고객예탁금 (단위:억원)', ticker: 'CUSTOMER_DEPOSITS' },
+  { id: '22', name: '신용공여 잔고 (단위:억원)', ticker: 'CREDIT_BALANCE' },
+  { id: '23', name: '반대매매금액 (단위:억원)', ticker: 'MARGIN_CALL', negativeFavorable: true },
+  { id: '24', name: 'KOSPI200 야간 선물 지수', ticker: 'KOSPI200_NIGHT', negativeFavorable: true },
+  { id: '25', name: 'ADR 지표', ticker: 'ADR_INFO' },
+  { id: '26', name: 'CDS 5Y Korea', ticker: 'CDS_KOREA' },
+  { id: '27', name: '외환보유액', ticker: 'FX_RESERVES' },
 ];
 
 async function getFearAndGreed() {
@@ -205,6 +209,34 @@ export async function GET() {
           dataRow.changeAmt = krxData.pbr.changeAmt;
           dataRow.changePercent = krxData.pbr.changePercent;
           dataRow.history = krxData.pbr.history;
+        }
+      } else if (item.ticker === 'KOSPI_TRADE_VALUE') {
+        if (krxData && krxData.kospi_trade_value) {
+          dataRow.price = krxData.kospi_trade_value.price;
+          dataRow.changeAmt = krxData.kospi_trade_value.changeAmt;
+          dataRow.changePercent = krxData.kospi_trade_value.changePercent;
+          dataRow.history = krxData.kospi_trade_value.history;
+        }
+      } else if (item.ticker === 'CUSTOMER_DEPOSITS') {
+        if (krxData && krxData.customer_deposits) {
+          dataRow.price = krxData.customer_deposits.price;
+          dataRow.changeAmt = krxData.customer_deposits.changeAmt;
+          dataRow.changePercent = krxData.customer_deposits.changePercent;
+          dataRow.history = krxData.customer_deposits.history;
+        }
+      } else if (item.ticker === 'CREDIT_BALANCE') {
+        if (krxData && krxData.credit_balance) {
+          dataRow.price = krxData.credit_balance.price;
+          dataRow.changeAmt = krxData.credit_balance.changeAmt;
+          dataRow.changePercent = krxData.credit_balance.changePercent;
+          dataRow.history = krxData.credit_balance.history;
+        }
+      } else if (item.ticker === 'MARGIN_CALL') {
+        if (krxData && krxData.margin_call) {
+          dataRow.price = krxData.margin_call.price;
+          dataRow.changeAmt = krxData.margin_call.changeAmt;
+          dataRow.changePercent = krxData.margin_call.changePercent;
+          dataRow.history = krxData.margin_call.history;
         }
       } else if (item.ticker === 'CL=F') {
         if (wtiData) {
