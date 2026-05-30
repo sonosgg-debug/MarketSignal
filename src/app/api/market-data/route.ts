@@ -183,6 +183,10 @@ export async function GET() {
           dataRow.changeAmt = krxData.kospi200_night.changeAmt;
           dataRow.changePercent = krxData.kospi200_night.changePercent;
           dataRow.history = krxData.kospi200_night.history;
+          dataRow.open = krxData.kospi200_night.open ?? null;
+          dataRow.high = krxData.kospi200_night.high ?? null;
+          dataRow.low = krxData.kospi200_night.low ?? null;
+          dataRow.close = krxData.kospi200_night.close ?? null;
         }
       } else if (item.ticker === 'ADR_INFO') {
         if (krxData && krxData.kospi_adr) {

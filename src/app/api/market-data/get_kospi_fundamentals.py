@@ -174,11 +174,41 @@ def main():
                 night_change = round(latest_night - prev_night, 2)
                 night_pct = round((night_change / prev_night) * 100, 2) if prev_night != 0 else 0.0
                 
+                # Fetch KOSPI200 Night Futures cache to get Open, High, Low, Close for daily candle
+                open_p = latest_night
+                high_p = latest_night
+                low_p = latest_night
+                close_p = latest_night
+                
+                try:
+                    import requests
+                    cache_url = "https://esignal.co.kr/data/cache/kospif_ngt.js"
+                    cache_headers = {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Referer': 'https://esignal.co.kr/kospi200-futures-night/'
+                    }
+                    r_cache = requests.get(cache_url, headers=cache_headers, timeout=5)
+                    if r_cache.status_code == 200:
+                        cache_json = r_cache.json()
+                        open_p = float(cache_json.get('open', latest_night))
+                        pts = cache_json.get('data', [])
+                        if len(pts) > 0:
+                            prices = [float(pt[1]) for pt in pts]
+                            high_p = max(prices)
+                            low_p = min(prices)
+                            close_p = prices[-1]
+                except Exception as ex:
+                    pass
+                
                 result["kospi200_night"] = {
                     "price": latest_night,
                     "changeAmt": night_change,
                     "changePercent": night_pct,
-                    "history": night_history
+                    "history": night_history,
+                    "open": round(open_p, 2),
+                    "high": round(high_p, 2),
+                    "low": round(low_p, 2),
+                    "close": round(close_p, 2)
                 }
 
         # ==========================================
