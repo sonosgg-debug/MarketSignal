@@ -160,7 +160,64 @@ def main():
                 }
 
         # ==========================================
-        # 5. Write results to krx_cache.json
+        # 5. Read KOSPI200 Night Futures
+        # ==========================================
+        night_path = r"D:\AI Investing\Daily_Check\DailyData\kospif_ngt_history.json"
+        if os.path.exists(night_path):
+            with open(night_path, "r", encoding="utf-8") as f:
+                night_data = json.load(f)
+            if night_data and len(night_data) >= 2:
+                night_60 = night_data[-60:]
+                night_history = [{"date": format_iso_date(item['date']), "value": round(float(item['price']), 2)} for item in night_60]
+                latest_night = round(float(night_data[-1]['price']), 2)
+                prev_night = round(float(night_data[-2]['price']), 2)
+                night_change = round(latest_night - prev_night, 2)
+                night_pct = round((night_change / prev_night) * 100, 2) if prev_night != 0 else 0.0
+                
+                result["kospi200_night"] = {
+                    "price": latest_night,
+                    "changeAmt": night_change,
+                    "changePercent": night_pct,
+                    "history": night_history
+                }
+
+        # ==========================================
+        # 6. Read & Compute KOSPI ADR(20, %)
+        # ==========================================
+        adr_path = r"D:\AI Investing\Daily_Check_K\adv_dec_history.json"
+        if os.path.exists(adr_path):
+            with open(adr_path, "r", encoding="utf-8") as f:
+                adr_data = json.load(f)
+            if adr_data and len(adr_data) >= 20:
+                adr_computed = []
+                for i in range(len(adr_data)):
+                    if i < 19:
+                        continue
+                    recent_20 = adr_data[i-19 : i+1]
+                    sum_adv = sum(item['adv'] for item in recent_20)
+                    sum_dec = sum(item['dec'] for item in recent_20)
+                    val = (sum_adv / sum_dec) * 100 if sum_dec != 0 else 0.0
+                    adr_computed.append({
+                        "date": adr_data[i]['date'],
+                        "value": round(val, 2)
+                    })
+                if len(adr_computed) >= 2:
+                    adr_60 = adr_computed[-60:]
+                    adr_history = [{"date": format_iso_date(item['date']), "value": item['value']} for item in adr_60]
+                    latest_adr = adr_computed[-1]['value']
+                    prev_adr = adr_computed[-2]['value']
+                    adr_change = round(latest_adr - prev_adr, 2)
+                    adr_pct = round((adr_change / prev_adr) * 100, 2) if prev_adr != 0 else 0.0
+                    
+                    result["kospi_adr"] = {
+                        "price": latest_adr,
+                        "changeAmt": adr_change,
+                        "changePercent": adr_pct,
+                        "history": adr_history
+                    }
+
+        # ==========================================
+        # 7. Write results to krx_cache.json
         # ==========================================
         script_dir = os.path.dirname(os.path.abspath(__file__))
         cache_path = os.path.join(script_dir, 'krx_cache.json')

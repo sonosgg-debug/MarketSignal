@@ -31,7 +31,7 @@ const TICKERS = [
   { id: '22', name: '신용공여 잔고 (단위:억원)', ticker: 'CREDIT_BALANCE' },
   { id: '23', name: '반대매매금액 (단위:억원)', ticker: 'MARGIN_CALL', negativeFavorable: true },
   { id: '24', name: 'KOSPI200 야간 선물 지수', ticker: 'KOSPI200_NIGHT', negativeFavorable: true },
-  { id: '25', name: 'ADR 지표', ticker: 'ADR_INFO' },
+  { id: '25', name: 'KOSPI ADR(20, %)', ticker: 'ADR_INFO' },
   { id: '26', name: 'CDS 5Y Korea', ticker: 'CDS_KOREA' },
   { id: '27', name: '외환보유액', ticker: 'FX_RESERVES' },
 ];
@@ -178,11 +178,19 @@ export async function GET() {
       };
 
       if (item.ticker === 'KOSPI200_NIGHT') {
-        dataRow.isLinkOnly = true;
-        dataRow.linkUrl = 'https://esignal.co.kr/kospi200-futures-night/';
+        if (krxData && krxData.kospi200_night) {
+          dataRow.price = krxData.kospi200_night.price;
+          dataRow.changeAmt = krxData.kospi200_night.changeAmt;
+          dataRow.changePercent = krxData.kospi200_night.changePercent;
+          dataRow.history = krxData.kospi200_night.history;
+        }
       } else if (item.ticker === 'ADR_INFO') {
-        dataRow.isLinkOnly = true;
-        dataRow.linkUrl = 'http://adrinfo.kr/';
+        if (krxData && krxData.kospi_adr) {
+          dataRow.price = krxData.kospi_adr.price;
+          dataRow.changeAmt = krxData.kospi_adr.changeAmt;
+          dataRow.changePercent = krxData.kospi_adr.changePercent;
+          dataRow.history = krxData.kospi_adr.history;
+        }
       } else if (item.ticker === 'CDS_KOREA') {
         dataRow.isLinkOnly = true;
         dataRow.linkUrl = 'https://www.indexergo.com/series/?detailId=09201&frq=D';
