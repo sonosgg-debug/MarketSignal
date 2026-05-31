@@ -24,16 +24,18 @@ const TICKERS = [
   { id: '15', name: 'CNN Fear & Greed Index', ticker: 'FEAR_GREED' },
   { id: '16', name: 'KOSPI 지수', ticker: '^KS11' },
   { id: '17', name: 'KOSDAQ 지수', ticker: '^KQ11' },
-  { id: '18', name: 'KOSPI PER', ticker: 'KOSPI_PER' },
-  { id: '19', name: 'KOSPI PBR', ticker: 'KOSPI_PBR' },
-  { id: '20', name: 'KOSPI 거래대금 (단위:억원)', ticker: 'KOSPI_TRADE_VALUE' },
-  { id: '21', name: '고객예탁금 (단위:억원)', ticker: 'CUSTOMER_DEPOSITS' },
-  { id: '22', name: '신용공여 잔고 (단위:억원)', ticker: 'CREDIT_BALANCE' },
-  { id: '23', name: '반대매매금액 (단위:억원)', ticker: 'MARGIN_CALL', negativeFavorable: true },
-  { id: '24', name: 'KOSPI200 야간 선물 지수', ticker: 'KOSPI200_NIGHT' },
-  { id: '25', name: 'KOSPI ADR(20, %)', ticker: 'ADR_INFO' },
-  { id: '26', name: 'CDS 5Y Korea', ticker: 'CDS_KOREA' },
-  { id: '27', name: '외환보유액', ticker: 'FX_RESERVES' },
+  { id: '18', name: 'KOSPI200 선물 지수', ticker: 'KOSPI200_FUTURES' },
+  { id: '19', name: 'KOSPI PER', ticker: 'KOSPI_PER' },
+  { id: '20', name: 'KOSPI PBR', ticker: 'KOSPI_PBR' },
+  { id: '21', name: 'KOSPI RSI(14, %)', ticker: 'KOSPI_RSI' },
+  { id: '22', name: 'KOSPI ADR(20, %)', ticker: 'ADR_INFO' },
+  { id: '23', name: 'KOSPI 거래대금 (단위:억원)', ticker: 'KOSPI_TRADE_VALUE' },
+  { id: '24', name: '고객예탁금 (단위:억원)', ticker: 'CUSTOMER_DEPOSITS' },
+  { id: '25', name: '신용공여 잔고 (단위:억원)', ticker: 'CREDIT_BALANCE' },
+  { id: '26', name: '반대매매금액 (단위:억원)', ticker: 'MARGIN_CALL', negativeFavorable: true },
+  { id: '27', name: 'KOSPI200 야간 선물 지수', ticker: 'KOSPI200_NIGHT' },
+  { id: '28', name: 'CDS 5Y Korea', ticker: 'CDS_KOREA' },
+  { id: '29', name: '외환보유액', ticker: 'FX_RESERVES' },
 ];
 
 async function getFearAndGreed() {
@@ -188,11 +190,29 @@ export async function GET() {
           dataRow.low = krxData.kospi200_night.low ?? null;
           dataRow.close = krxData.kospi200_night.close ?? null;
         }
+      } else if (item.ticker === 'KOSPI200_FUTURES') {
+        if (krxData && krxData.kospi200_futures) {
+          dataRow.price = krxData.kospi200_futures.price;
+          dataRow.changeAmt = krxData.kospi200_futures.changeAmt;
+          dataRow.changePercent = krxData.kospi200_futures.changePercent;
+          dataRow.history = krxData.kospi200_futures.history;
+          dataRow.open = krxData.kospi200_futures.open ?? null;
+          dataRow.high = krxData.kospi200_futures.high ?? null;
+          dataRow.low = krxData.kospi200_futures.low ?? null;
+          dataRow.close = krxData.kospi200_futures.close ?? null;
+        }
+      } else if (item.ticker === 'KOSPI_RSI') {
+        if (krxData && krxData.kospi_rsi) {
+          dataRow.price = krxData.kospi_rsi.price;
+          dataRow.changeAmt = krxData.kospi_rsi.changeAmt;
+          dataRow.changePercent = null; // Suppress change rate as requested by user
+          dataRow.history = krxData.kospi_rsi.history;
+        }
       } else if (item.ticker === 'ADR_INFO') {
         if (krxData && krxData.kospi_adr) {
           dataRow.price = krxData.kospi_adr.price;
           dataRow.changeAmt = krxData.kospi_adr.changeAmt;
-          dataRow.changePercent = krxData.kospi_adr.changePercent;
+          dataRow.changePercent = null; // Suppress change rate as requested by user
           dataRow.history = krxData.kospi_adr.history;
         }
       } else if (item.ticker === 'CDS_KOREA') {

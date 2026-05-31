@@ -3,6 +3,9 @@ import sys
 import json
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
 
 # Load KRX environment variables
 krx_env_path = r"D:\AI Investing\KRXdata\.env"
@@ -21,6 +24,129 @@ def format_iso_date(date_str):
     else:
         dt = date_str
     return dt.strftime("%Y-%m-%dT00:00:00.000Z")
+
+def get_naver_futures():
+    data_list = []
+    headers = {"User-Agent": "Mozilla/5.0"}
+    
+    # 1. Scrape history (11 pages)
+    for page in range(1, 12):
+        url = f"https://finance.naver.com/sise/sise_index_day.naver?code=FUT&page={page}"
+        try:
+            res = requests.get(url, headers=headers, timeout=5)
+            if res.status_code != 200:
+                continue
+            soup = BeautifulSoup(res.content.decode("euc-kr", "replace"), "html.parser")
+            table = soup.find("table", class_="type_1")
+            if not table:
+                continue
+            rows = table.find_all("tr")
+            for r in rows:
+                cols = r.find_all("td")
+                if len(cols) >= 6:
+                    date_str = cols[0].text.strip()
+                    if not date_str or "." not in date_str:
+                        continue
+                    close_str = cols[1].text.strip().replace(",", "")
+                    try:
+                        date_obj = datetime.strptime(date_str, "%Y.%m.%d")
+                        close_val = float(close_str)
+                        data_list.append({"Date": date_obj, "Close": close_val})
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+            
+    if not data_list:
+        return None
+        
+    df = pd.DataFrame(data_list)
+    df = df.drop_duplicates(subset=["Date"])
+    df = df.set_index("Date")
+    df = df.sort_index()
+    
+    # 2. Scrape current quote details
+    open_val = None
+    high_val = None
+    low_val = None
+    price_val = None
+    change_val = None
+    pct_val = None
+    
+    try:
+        url_curr = "https://finance.naver.com/sise/sise_index.naver?code=FUT"
+        res_curr = requests.get(url_curr, headers=headers, timeout=5)
+        if res_curr.status_code == 200:
+            soup_curr = BeautifulSoup(res_curr.content, "html.parser", from_encoding="euc-kr")
+            for tr in soup_curr.find_all("tr"):
+                cells = tr.find_all(["th", "td"])
+                texts = [c.get_text(strip=True) for c in cells]
+                for idx, text in enumerate(texts):
+                    if "선물(" in text:
+                        price_val = float(texts[idx+1].replace(",", ""))
+                    elif "시가" in text:
+                        open_val = float(texts[idx+1].replace(",", ""))
+                    elif "전일대비" in text:
+                        val_str = "".join(c for c in texts[idx+1] if c.isdigit() or c == ".")
+                        if val_str:
+                            change_val = float(val_str)
+                            if "-" in texts[idx+1] or "하락" in texts[idx+1]:
+                                change_val = -change_val
+                    elif "고가" in text:
+                        high_val = float(texts[idx+1].replace(",", ""))
+                    elif "저가" in text:
+                        low_val = float(texts[idx+1].replace(",", ""))
+                    elif "등락률" in text:
+                        pct_str = texts[idx+1].replace("%", "").strip()
+                        pct_val = float(pct_str)
+    except Exception:
+        pass
+        
+    # fallback to latest historical if current quote fails
+    latest_hist_date = df.index[-1]
+    latest_hist_close = float(df["Close"].iloc[-1])
+    
+    if price_val is None:
+        price_val = latest_hist_close
+    if open_val is None:
+        open_val = price_val
+    if high_val is None:
+        high_val = price_val
+    if low_val is None:
+        low_val = price_val
+        
+    if change_val is None or pct_val is None:
+        if len(df) >= 2:
+            prev_close = float(df["Close"].iloc[-2])
+            change_val = price_val - prev_close
+            pct_val = (change_val / prev_close) * 100 if prev_close != 0 else 0.0
+            
+    # merge current into history if it's newer than latest historical date
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    latest_hist_str = latest_hist_date.strftime("%Y-%m-%d")
+    
+    df_60 = df.tail(60)
+    history_list = [{"date": dt.strftime("%Y-%m-%dT00:00:00.000Z"), "value": round(float(row["Close"]), 2)} for dt, row in df_60.iterrows()]
+    
+    # if today is newer, we can append it or update the last element
+    if today_str > latest_hist_str:
+        history_list.append({
+            "date": datetime.now().strftime("%Y-%m-%dT00:00:00.000Z"),
+            "value": price_val
+        })
+        if len(history_list) > 60:
+            history_list = history_list[-60:]
+            
+    return {
+        "price": price_val,
+        "changeAmt": change_val,
+        "changePercent": pct_val,
+        "open": open_val,
+        "high": high_val,
+        "low": low_val,
+        "close": price_val,
+        "history": history_list
+    }
 
 def main():
     try:
@@ -69,7 +195,7 @@ def main():
                 }
 
         # ==========================================
-        # 2. Fetch KOSPI Trading Value
+        # 2. Fetch KOSPI Trading Value & Calculate KOSPI RSI(14)
         # ==========================================
         df_ohlcv = stock.get_index_ohlcv_by_date(start_date, end_date, "1001")
         if df_ohlcv is not None and not df_ohlcv.empty:
@@ -97,6 +223,31 @@ def main():
                         "changeAmt": val_change,
                         "changePercent": val_pct,
                         "history": history_val
+                    }
+            
+            # KOSPI RSI(14)
+            close_series = df_ohlcv.iloc[:, 3].copy()
+            if len(close_series) >= 15:
+                delta = close_series.diff()
+                gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+                loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+                rs = gain / loss
+                rsi_series = 100 - (100 / (1 + rs))
+                rsi_series = rsi_series.dropna()
+                
+                if len(rsi_series) >= 2:
+                    rsi_60 = rsi_series.tail(60)
+                    history_rsi = [{"date": format_iso_date(dt), "value": round(float(val), 2)} for dt, val in rsi_60.items()]
+                    latest_rsi = round(float(rsi_series.iloc[-1]), 2)
+                    prev_rsi = round(float(rsi_series.iloc[-2]), 2)
+                    rsi_change = round(latest_rsi - prev_rsi, 2)
+                    rsi_pct = round((rsi_change / prev_rsi) * 100, 2) if prev_rsi != 0 else 0.0
+                    
+                    result["kospi_rsi"] = {
+                        "price": latest_rsi,
+                        "changeAmt": rsi_change,
+                        "changePercent": rsi_pct,
+                        "history": history_rsi
                     }
 
         # ==========================================
@@ -184,7 +335,7 @@ def main():
                     import requests
                     cache_url = "https://esignal.co.kr/data/cache/kospif_ngt.js"
                     cache_headers = {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'User-Agent': 'Mozilla/5.0',
                         'Referer': 'https://esignal.co.kr/kospi200-futures-night/'
                     }
                     r_cache = requests.get(cache_url, headers=cache_headers, timeout=5)
@@ -197,7 +348,7 @@ def main():
                             high_p = max(prices)
                             low_p = min(prices)
                             close_p = prices[-1]
-                except Exception as ex:
+                except Exception:
                     pass
                 
                 result["kospi200_night"] = {
@@ -247,7 +398,17 @@ def main():
                     }
 
         # ==========================================
-        # 7. Write results to krx_cache.json
+        # 7. Fetch KOSPI200 Futures
+        # ==========================================
+        try:
+            futures_data = get_naver_futures()
+            if futures_data:
+                result["kospi200_futures"] = futures_data
+        except Exception:
+            pass
+
+        # ==========================================
+        # 8. Write results to krx_cache.json
         # ==========================================
         script_dir = os.path.dirname(os.path.abspath(__file__))
         cache_path = os.path.join(script_dir, 'krx_cache.json')

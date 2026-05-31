@@ -72,14 +72,16 @@ export function Dashboard() {
     const isKMarket = 
       item.ticker === "^KS11" || 
       item.ticker === "^KQ11" || 
+      item.ticker === "KOSPI200_FUTURES" || 
       item.ticker === "KOSPI_PER" || 
       item.ticker === "KOSPI_PBR" || 
+      item.ticker === "KOSPI_RSI" || 
+      item.ticker === "ADR_INFO" || 
       item.ticker === "KOSPI_TRADE_VALUE" || 
       item.ticker === "CUSTOMER_DEPOSITS" || 
       item.ticker === "CREDIT_BALANCE" || 
       item.ticker === "MARGIN_CALL" || 
       item.ticker === "KOSPI200_NIGHT" || 
-      item.ticker === "ADR_INFO" || 
       item.ticker === "CDS_KOREA" || 
       item.ticker === "FX_RESERVES";
     
