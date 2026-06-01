@@ -311,6 +311,18 @@ def main():
                 }
 
         # ==========================================
+        # 4-5. Fetch KOSPI200 Futures (Pre-fetch for Night Futures reference price)
+        # ==========================================
+        futures_price_ref = None
+        try:
+            futures_data = get_naver_futures()
+            if futures_data:
+                result["kospi200_futures"] = futures_data
+                futures_price_ref = futures_data.get("price")
+        except Exception:
+            pass
+
+        # ==========================================
         # 5. Read KOSPI200 Night Futures
         # ==========================================
         night_path = r"D:\AI Investing\Daily_Check\DailyData\kospif_ngt_history.json"
@@ -354,6 +366,20 @@ def main():
                 night_60 = night_data[-60:]
                 night_history = [{"date": format_iso_date(item['date']), "value": round(float(item['price']), 2)} for item in night_60]
                 
+                # Determine reference price for change calculation (compares to daytime futures closing price)
+                # If not fetched in this run, try to load from the existing cache
+                if futures_price_ref is None:
+                    try:
+                        script_dir = os.path.dirname(os.path.abspath(__file__))
+                        cache_path = os.path.join(script_dir, 'krx_cache.json')
+                        if os.path.exists(cache_path):
+                            with open(cache_path, 'r', encoding='utf-8') as f_old:
+                                old_cache = json.load(f_old)
+                                if isinstance(old_cache, dict):
+                                    futures_price_ref = old_cache.get("kospi200_futures", {}).get("price")
+                    except Exception:
+                        pass
+
                 if has_live:
                     current_price = close_p
                     if today_str > last_hist_date:
@@ -370,8 +396,10 @@ def main():
                     current_price = latest_night_from_file
                     prev_price = round(float(night_data[-2]['price']), 2)
                 
-                night_change = round(current_price - prev_price, 2)
-                night_pct = round((night_change / prev_price) * 100, 2) if prev_price != 0 else 0.0
+                # Reference price for change and changePercent calculations is the daytime futures price
+                change_base_price = futures_price_ref if futures_price_ref is not None else prev_price
+                night_change = round(current_price - change_base_price, 2)
+                night_pct = round((night_change / change_base_price) * 100, 2) if change_base_price != 0 else 0.0
                 
                 result["kospi200_night"] = {
                     "price": round(current_price, 2),
@@ -418,16 +446,6 @@ def main():
                         "changePercent": adr_pct,
                         "history": adr_history
                     }
-
-        # ==========================================
-        # 7. Fetch KOSPI200 Futures
-        # ==========================================
-        try:
-            futures_data = get_naver_futures()
-            if futures_data:
-                result["kospi200_futures"] = futures_data
-        except Exception:
-            pass
 
         # ==========================================
         # 8. Write results to krx_cache.json
