@@ -318,21 +318,16 @@ def main():
             with open(night_path, "r", encoding="utf-8") as f:
                 night_data = json.load(f)
             if night_data and len(night_data) >= 2:
-                night_60 = night_data[-60:]
-                night_history = [{"date": format_iso_date(item['date']), "value": round(float(item['price']), 2)} for item in night_60]
-                latest_night = round(float(night_data[-1]['price']), 2)
-                prev_night = round(float(night_data[-2]['price']), 2)
-                night_change = round(latest_night - prev_night, 2)
-                night_pct = round((night_change / prev_night) * 100, 2) if prev_night != 0 else 0.0
+                # Fetch KOSPI200 Night Futures live cache to get Open, High, Low, Close for daily candle
+                latest_night_from_file = round(float(night_data[-1]['price']), 2)
                 
-                # Fetch KOSPI200 Night Futures cache to get Open, High, Low, Close for daily candle
-                open_p = latest_night
-                high_p = latest_night
-                low_p = latest_night
-                close_p = latest_night
+                open_p = latest_night_from_file
+                high_p = latest_night_from_file
+                low_p = latest_night_from_file
+                close_p = latest_night_from_file
+                has_live = False
                 
                 try:
-                    import requests
                     cache_url = "https://esignal.co.kr/data/cache/kospif_ngt.js"
                     cache_headers = {
                         'User-Agent': 'Mozilla/5.0',
@@ -341,18 +336,45 @@ def main():
                     r_cache = requests.get(cache_url, headers=cache_headers, timeout=5)
                     if r_cache.status_code == 200:
                         cache_json = r_cache.json()
-                        open_p = float(cache_json.get('open', latest_night))
+                        open_p = float(cache_json.get('open', latest_night_from_file))
                         pts = cache_json.get('data', [])
                         if len(pts) > 0:
                             prices = [float(pt[1]) for pt in pts]
                             high_p = max(prices)
                             low_p = min(prices)
                             close_p = prices[-1]
+                            has_live = True
                 except Exception:
                     pass
+
+                # Get today's local date
+                today_str = datetime.now().strftime("%Y-%m-%d")
+                last_hist_date = night_data[-1]['date']
+                
+                night_60 = night_data[-60:]
+                night_history = [{"date": format_iso_date(item['date']), "value": round(float(item['price']), 2)} for item in night_60]
+                
+                if has_live:
+                    current_price = close_p
+                    if today_str > last_hist_date:
+                        # Case 1: Live session has ended/is active but not yet written to history file
+                        prev_price = latest_night_from_file
+                        night_history.append({"date": format_iso_date(today_str), "value": round(current_price, 2)})
+                        if len(night_history) > 60:
+                            night_history = night_history[-60:]
+                    else:
+                        # Case 2: Today's session is already written to history file
+                        prev_price = round(float(night_data[-2]['price']), 2)
+                        night_history[-1]['value'] = round(current_price, 2)
+                else:
+                    current_price = latest_night_from_file
+                    prev_price = round(float(night_data[-2]['price']), 2)
+                
+                night_change = round(current_price - prev_price, 2)
+                night_pct = round((night_change / prev_price) * 100, 2) if prev_price != 0 else 0.0
                 
                 result["kospi200_night"] = {
-                    "price": latest_night,
+                    "price": round(current_price, 2),
                     "changeAmt": night_change,
                     "changePercent": night_pct,
                     "history": night_history,
