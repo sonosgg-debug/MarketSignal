@@ -160,46 +160,7 @@ export async function GET() {
       console.error("Failed to start background KRX update:", bgErr);
     }
 
-    // Fetch WTI data from cache immediately (for ultra-fast response)
-    let wtiData: any = null;
-    const wtiScriptPath = path.join(process.cwd(), 'src/app/api/market-data/get_wti_crude_oil.py');
-    const wtiCachePath = path.join(process.cwd(), 'src/app/api/market-data/wti_cache.json');
 
-    try {
-      if (fs.existsSync(wtiCachePath)) {
-        const cacheContent = fs.readFileSync(wtiCachePath, 'utf-8');
-        wtiData = JSON.parse(cacheContent);
-      }
-    } catch (wtiErr) {
-      console.error("Error reading WTI cache:", wtiErr);
-    }
-
-    // Trigger asynchronous background update to keep the WTI cache fresh
-    try {
-      exec(`python "${wtiScriptPath}"`, (error, stdout, stderr) => {
-        if (!error && stdout) {
-          try {
-            const jsonStart = stdout.indexOf('{');
-            if (jsonStart !== -1) {
-              const parsed = JSON.parse(stdout.substring(jsonStart));
-              if (parsed && parsed.success) {
-                console.log("WTI cache updated successfully in background.");
-              } else if (parsed && parsed.error) {
-                console.error("WTI background update script returned error:", parsed.error);
-              }
-            } else {
-              console.error("WTI background update did not output valid JSON:", stdout);
-            }
-          } catch (e) {
-            // Ignore parse errors
-          }
-        } else if (error) {
-          console.error("Failed to execute WTI background update:", error);
-        }
-      });
-    } catch (bgErr) {
-      console.error("Failed to start background WTI update:", bgErr);
-    }
 
     const endDate = new Date();
     const startDate = new Date();
@@ -313,17 +274,7 @@ export async function GET() {
           dataRow.changePercent = krxData.margin_call.changePercent;
           dataRow.history = krxData.margin_call.history;
         }
-      } else if (item.ticker === 'CL=F') {
-        if (wtiData) {
-          dataRow.price = wtiData.price;
-          dataRow.open = wtiData.open;
-          dataRow.high = wtiData.high;
-          dataRow.low = wtiData.low;
-          dataRow.close = wtiData.close;
-          dataRow.changeAmt = wtiData.changeAmt;
-          dataRow.changePercent = wtiData.changePercent;
-          dataRow.history = wtiData.history;
-        }
+
       } else {
         try {
           // Fetch quote first for the latest real-time stats
