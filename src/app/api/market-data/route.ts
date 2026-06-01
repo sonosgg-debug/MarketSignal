@@ -89,9 +89,52 @@ export async function GET() {
       console.error("Error reading KRX cache:", cacheErr);
     }
 
+    // Check if the KRX cache is stale
+    let isKrxStale = false;
+    try {
+      if (fs.existsSync(cachePath)) {
+        const stats = fs.statSync(cachePath);
+        const mtime = stats.mtime;
+        const now = new Date();
+        
+        // 1. If it's been more than 1 hour since the last update, consider it stale
+        const oneHour = 60 * 60 * 1000;
+        if (now.getTime() - mtime.getTime() > oneHour) {
+          isKrxStale = true;
+        }
+
+        // 2. If it is a weekday after market close (16:00) but today's data is missing in the cache history, consider it stale
+        const dayOfWeek = now.getDay();
+        const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+        const isAfterMarketClose = now.getHours() >= 16;
+        
+        if (isWeekday && isAfterMarketClose && krxData) {
+          const todayStr = now.toISOString().split('T')[0]; // "YYYY-MM-DD"
+          
+          // Check the date of the latest item in per history
+          const perHistory = krxData.per?.history || [];
+          if (perHistory.length > 0) {
+            const lastDataDate = perHistory[perHistory.length - 1].date; // "YYYY-MM-DDT00:00:00.000Z"
+            const lastDataDateStr = lastDataDate.split('T')[0];
+            
+            if (lastDataDateStr < todayStr) {
+              isKrxStale = true;
+            }
+          }
+        }
+      } else {
+        isKrxStale = true;
+      }
+    } catch (err) {
+      console.error("Error determining KRX cache stale status:", err);
+    }
+
     // Trigger asynchronous background update to keep the cache fresh for next time
     try {
       exec(`python "${scriptPath}"`, (error, stdout, stderr) => {
+        if (stderr) {
+          console.error(`KRX background update python stderr: ${stderr}`);
+        }
         if (!error && stdout) {
           try {
             const jsonStart = stdout.indexOf('{');
@@ -107,10 +150,10 @@ export async function GET() {
               console.error("KRX background update did not output valid JSON:", stdout);
             }
           } catch (e) {
-            // Ignore parse errors from background refresh
+            console.error("Failed to parse KRX background update JSON:", e);
           }
         } else if (error) {
-          console.error("Failed to execute KRX background update:", error);
+          console.error("Failed to execute KRX background update command error:", error);
         }
       });
     } catch (bgErr) {
@@ -362,6 +405,20 @@ export async function GET() {
           console.error(`Error fetching ${item.ticker}:`, e);
         }
       }
+
+      // Set stale flag for KRX cache-based indicators
+      const isKrxCacheIndicator = [
+        'KOSPI200_NIGHT', 'KOSPI200_FUTURES', 'KOSPI_RSI', 'ADR_INFO',
+        'KOSPI_PER', 'KOSPI_PBR', 'KOSPI_TRADE_VALUE',
+        'CUSTOMER_DEPOSITS', 'CREDIT_BALANCE', 'MARGIN_CALL'
+      ].includes(item.ticker);
+      
+      if (isKrxCacheIndicator) {
+        dataRow.isStale = isKrxStale;
+      } else {
+        dataRow.isStale = false;
+      }
+
       results.push(dataRow);
     }
     

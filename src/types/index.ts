@@ -14,4 +14,5 @@ export interface IndicatorData {
   isOdd: boolean;
   isLinkOnly?: boolean;
   linkUrl?: string;
+  isStale?: boolean;
 }

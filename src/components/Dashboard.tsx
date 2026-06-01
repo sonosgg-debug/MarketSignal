@@ -27,6 +27,14 @@ export function Dashboard() {
       setData(result);
       setLastUpdated(new Date());
       setError(null);
+
+      // If any of the fetched data is stale, trigger a silent background re-fetch after 4 seconds
+      // to pull the newly updated cache without blocking the user
+      if (!refresh && result.some(item => item.isStale)) {
+        setTimeout(() => {
+          fetchData(true);
+        }, 4000);
+      }
     } catch (err: any) {
       setError(err.message || "An unknown error occurred");
     } finally {
