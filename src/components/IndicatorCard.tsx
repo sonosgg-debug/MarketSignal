@@ -111,8 +111,17 @@ export function IndicatorCard({ data, displayIndex }: Props) {
     );
   }
 
-  const formattedPrice = price !== null ? price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "N/A";
-  const formattedChange = changeAmt !== null ? Math.abs(changeAmt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-";
+  // 지표 08, 09, 10, 11 (KOSPI 거래대금, 고객예탁금, 신용공여 잔고, 반대매매금액)은 소수점 이하 반올림(정수) 표시
+  const isIntegerOnly = 
+    data.ticker === "KOSPI_TRADE_VALUE" || 
+    data.ticker === "CUSTOMER_DEPOSITS" || 
+    data.ticker === "CREDIT_BALANCE" || 
+    data.ticker === "MARGIN_CALL";
+
+  const fractionDigits = isIntegerOnly ? 0 : 2;
+
+  const formattedPrice = price !== null ? price.toLocaleString(undefined, { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }) : "N/A";
+  const formattedChange = changeAmt !== null ? Math.abs(changeAmt).toLocaleString(undefined, { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }) : "-";
   const formattedPercent = changePercent !== null ? Math.abs(changePercent).toFixed(2) + "%" : "-";
 
   return (
@@ -164,7 +173,12 @@ export function IndicatorCard({ data, displayIndex }: Props) {
                   itemStyle={{ color: '#fafafa' }}
                   labelStyle={{ color: '#a1a1aa', marginBottom: '4px', fontSize: '11px' }}
                   formatter={(value: any) => {
-                    if (typeof value === 'number') return [value.toLocaleString(undefined, { minimumFractionDigits: 2 }), ""];
+                    if (typeof value === 'number') {
+                      return [value.toLocaleString(undefined, { 
+                        minimumFractionDigits: fractionDigits, 
+                        maximumFractionDigits: fractionDigits 
+                      }), ""];
+                    }
                     return [value, ""];
                   }}
                   labelFormatter={(label) => label}
