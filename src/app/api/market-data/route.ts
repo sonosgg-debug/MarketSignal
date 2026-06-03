@@ -68,10 +68,10 @@ async function getFearAndGreed() {
   }
 }
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
-    const results: IndicatorData[] = [];
-    
     // Fear and greed
     const fgData = await getFearAndGreed();
 
@@ -110,13 +110,10 @@ export async function GET() {
         
         if (isWeekday && isAfterMarketClose && krxData) {
           const todayStr = now.toISOString().split('T')[0]; // "YYYY-MM-DD"
-          
-          // Check the date of the latest item in per history
           const perHistory = krxData.per?.history || [];
           if (perHistory.length > 0) {
             const lastDataDate = perHistory[perHistory.length - 1].date; // "YYYY-MM-DDT00:00:00.000Z"
             const lastDataDateStr = lastDataDate.split('T')[0];
-            
             if (lastDataDateStr < todayStr) {
               isKrxStale = true;
             }
@@ -160,222 +157,218 @@ export async function GET() {
       console.error("Failed to start background KRX update:", bgErr);
     }
 
-
-
     const endDate = new Date();
     const startDate = new Date();
     startDate.setMonth(startDate.getMonth() - 3);
 
-    for (const item of TICKERS) {
-      let dataRow: IndicatorData = {
-        id: item.id,
-        name: item.name,
-        ticker: item.ticker,
-        price: null,
-        changeAmt: null,
-        changePercent: null,
-        history: [],
-        open: null,
-        high: null,
-        low: null,
-        close: null,
-        isNegativeFavorable: !!item.negativeFavorable,
-        isOdd: false // calculated dynamically on frontend
-      };
+    // Fetch all tickers concurrently using Promise.all to prevent sequential request lag
+    const results = await Promise.all(
+      TICKERS.map(async (item) => {
+        let dataRow: IndicatorData = {
+          id: item.id,
+          name: item.name,
+          ticker: item.ticker,
+          price: null,
+          changeAmt: null,
+          changePercent: null,
+          history: [],
+          open: null,
+          high: null,
+          low: null,
+          close: null,
+          isNegativeFavorable: !!item.negativeFavorable,
+          isOdd: false
+        };
 
-      if (item.ticker === 'KOSPI200_NIGHT') {
-        if (krxData && krxData.kospi200_night) {
-          dataRow.price = krxData.kospi200_night.price;
-          dataRow.changeAmt = krxData.kospi200_night.changeAmt;
-          dataRow.changePercent = krxData.kospi200_night.changePercent;
-          dataRow.history = krxData.kospi200_night.history;
-          dataRow.open = krxData.kospi200_night.open ?? null;
-          dataRow.high = krxData.kospi200_night.high ?? null;
-          dataRow.low = krxData.kospi200_night.low ?? null;
-          dataRow.close = krxData.kospi200_night.close ?? null;
-        }
-      } else if (item.ticker === 'KOSPI200_FUTURES') {
-        if (krxData && krxData.kospi200_futures) {
-          dataRow.price = krxData.kospi200_futures.price;
-          dataRow.changeAmt = krxData.kospi200_futures.changeAmt;
-          dataRow.changePercent = krxData.kospi200_futures.changePercent;
-          dataRow.history = krxData.kospi200_futures.history;
-          dataRow.open = krxData.kospi200_futures.open ?? null;
-          dataRow.high = krxData.kospi200_futures.high ?? null;
-          dataRow.low = krxData.kospi200_futures.low ?? null;
-          dataRow.close = krxData.kospi200_futures.close ?? null;
-        }
-      } else if (item.ticker === 'KOSPI_RSI') {
-        if (krxData && krxData.kospi_rsi) {
-          dataRow.price = krxData.kospi_rsi.price;
-          dataRow.changeAmt = krxData.kospi_rsi.changeAmt;
-          dataRow.changePercent = null; // Suppress change rate as requested by user
-          dataRow.history = krxData.kospi_rsi.history;
-        }
-      } else if (item.ticker === 'ADR_INFO') {
-        if (krxData && krxData.kospi_adr) {
-          dataRow.price = krxData.kospi_adr.price;
-          dataRow.changeAmt = krxData.kospi_adr.changeAmt;
-          dataRow.changePercent = null; // Suppress change rate as requested by user
-          dataRow.history = krxData.kospi_adr.history;
-        }
-      } else if (item.ticker === 'CDS_KOREA') {
-        dataRow.isLinkOnly = true;
-        dataRow.linkUrl = 'https://www.indexergo.com/series/?detailId=09201&frq=D';
-      } else if (item.ticker === 'FX_RESERVES') {
-        dataRow.isLinkOnly = true;
-        dataRow.linkUrl = 'https://www.indexergo.com/series/?detailId=12501&frq=M';
-      } else if (item.ticker === 'FEAR_GREED') {
-        if (fgData) {
-          dataRow.price = fgData.score;
-          dataRow.changeAmt = fgData.changeAmt;
-          dataRow.changePercent = fgData.changePercent;
-          dataRow.history = fgData.history;
-        }
-      } else if (item.ticker === 'KOSPI_PER') {
-        if (krxData && krxData.per) {
-          dataRow.price = krxData.per.price;
-          dataRow.changeAmt = krxData.per.changeAmt;
-          dataRow.changePercent = krxData.per.changePercent;
-          dataRow.history = krxData.per.history;
-        }
-      } else if (item.ticker === 'KOSPI_PBR') {
-        if (krxData && krxData.pbr) {
-          dataRow.price = krxData.pbr.price;
-          dataRow.changeAmt = krxData.pbr.changeAmt;
-          dataRow.changePercent = krxData.pbr.changePercent;
-          dataRow.history = krxData.pbr.history;
-        }
-      } else if (item.ticker === 'KOSPI_TRADE_VALUE') {
-        if (krxData && krxData.kospi_trade_value) {
-          dataRow.price = krxData.kospi_trade_value.price;
-          dataRow.changeAmt = krxData.kospi_trade_value.changeAmt;
-          dataRow.changePercent = krxData.kospi_trade_value.changePercent;
-          dataRow.history = krxData.kospi_trade_value.history;
-        }
-      } else if (item.ticker === 'CUSTOMER_DEPOSITS') {
-        if (krxData && krxData.customer_deposits) {
-          dataRow.price = krxData.customer_deposits.price;
-          dataRow.changeAmt = krxData.customer_deposits.changeAmt;
-          dataRow.changePercent = krxData.customer_deposits.changePercent;
-          dataRow.history = krxData.customer_deposits.history;
-        }
-      } else if (item.ticker === 'CREDIT_BALANCE') {
-        if (krxData && krxData.credit_balance) {
-          dataRow.price = krxData.credit_balance.price;
-          dataRow.changeAmt = krxData.credit_balance.changeAmt;
-          dataRow.changePercent = krxData.credit_balance.changePercent;
-          dataRow.history = krxData.credit_balance.history;
-        }
-      } else if (item.ticker === 'MARGIN_CALL') {
-        if (krxData && krxData.margin_call) {
-          dataRow.price = krxData.margin_call.price;
-          dataRow.changeAmt = krxData.margin_call.changeAmt;
-          dataRow.changePercent = krxData.margin_call.changePercent;
-          dataRow.history = krxData.margin_call.history;
+        const isKrxCacheIndicator = [
+          'KOSPI200_NIGHT', 'KOSPI200_FUTURES', 'KOSPI_RSI', 'ADR_INFO',
+          'KOSPI_PER', 'KOSPI_PBR', 'KOSPI_TRADE_VALUE',
+          'CUSTOMER_DEPOSITS', 'CREDIT_BALANCE', 'MARGIN_CALL'
+        ].includes(item.ticker);
+
+        if (isKrxCacheIndicator) {
+          dataRow.isStale = isKrxStale;
+        } else {
+          dataRow.isStale = false;
         }
 
-      } else {
-        try {
-          // Fetch quote first for the latest real-time stats
-          let quote: any = null;
+        if (item.ticker === 'KOSPI200_NIGHT') {
+          if (krxData && krxData.kospi200_night) {
+            dataRow.price = krxData.kospi200_night.price;
+            dataRow.changeAmt = krxData.kospi200_night.changeAmt;
+            dataRow.changePercent = krxData.kospi200_night.changePercent;
+            dataRow.history = krxData.kospi200_night.history;
+            dataRow.open = krxData.kospi200_night.open ?? null;
+            dataRow.high = krxData.kospi200_night.high ?? null;
+            dataRow.low = krxData.kospi200_night.low ?? null;
+            dataRow.close = krxData.kospi200_night.close ?? null;
+          }
+        } else if (item.ticker === 'KOSPI200_FUTURES') {
+          if (krxData && krxData.kospi200_futures) {
+            dataRow.price = krxData.kospi200_futures.price;
+            dataRow.changeAmt = krxData.kospi200_futures.changeAmt;
+            dataRow.changePercent = krxData.kospi200_futures.changePercent;
+            dataRow.history = krxData.kospi200_futures.history;
+            dataRow.open = krxData.kospi200_futures.open ?? null;
+            dataRow.high = krxData.kospi200_futures.high ?? null;
+            dataRow.low = krxData.kospi200_futures.low ?? null;
+            dataRow.close = krxData.kospi200_futures.close ?? null;
+          }
+        } else if (item.ticker === 'KOSPI_RSI') {
+          if (krxData && krxData.kospi_rsi) {
+            dataRow.price = krxData.kospi_rsi.price;
+            dataRow.changeAmt = krxData.kospi_rsi.changeAmt;
+            dataRow.changePercent = null;
+            dataRow.history = krxData.kospi_rsi.history;
+          }
+        } else if (item.ticker === 'ADR_INFO') {
+          if (krxData && krxData.kospi_adr) {
+            dataRow.price = krxData.kospi_adr.price;
+            dataRow.changeAmt = krxData.kospi_adr.changeAmt;
+            dataRow.changePercent = null;
+            dataRow.history = krxData.kospi_adr.history;
+          }
+        } else if (item.ticker === 'CDS_KOREA') {
+          dataRow.isLinkOnly = true;
+          dataRow.linkUrl = 'https://www.indexergo.com/series/?detailId=09201&frq=D';
+        } else if (item.ticker === 'FX_RESERVES') {
+          dataRow.isLinkOnly = true;
+          dataRow.linkUrl = 'https://www.indexergo.com/series/?detailId=12501&frq=M';
+        } else if (item.ticker === 'FEAR_GREED') {
+          if (fgData) {
+            dataRow.price = fgData.score;
+            dataRow.changeAmt = fgData.changeAmt;
+            dataRow.changePercent = fgData.changePercent;
+            dataRow.history = fgData.history;
+          }
+        } else if (item.ticker === 'KOSPI_PER') {
+          if (krxData && krxData.per) {
+            dataRow.price = krxData.per.price;
+            dataRow.changeAmt = krxData.per.changeAmt;
+            dataRow.changePercent = krxData.per.changePercent;
+            dataRow.history = krxData.per.history;
+          }
+        } else if (item.ticker === 'KOSPI_PBR') {
+          if (krxData && krxData.pbr) {
+            dataRow.price = krxData.pbr.price;
+            dataRow.changeAmt = krxData.pbr.changeAmt;
+            dataRow.changePercent = krxData.pbr.changePercent;
+            dataRow.history = krxData.pbr.history;
+          }
+        } else if (item.ticker === 'KOSPI_TRADE_VALUE') {
+          if (krxData && krxData.kospi_trade_value) {
+            dataRow.price = krxData.kospi_trade_value.price;
+            dataRow.changeAmt = krxData.kospi_trade_value.changeAmt;
+            dataRow.changePercent = krxData.kospi_trade_value.changePercent;
+            dataRow.history = krxData.kospi_trade_value.history;
+          }
+        } else if (item.ticker === 'CUSTOMER_DEPOSITS') {
+          if (krxData && krxData.customer_deposits) {
+            dataRow.price = krxData.customer_deposits.price;
+            dataRow.changeAmt = krxData.customer_deposits.changeAmt;
+            dataRow.changePercent = krxData.customer_deposits.changePercent;
+            dataRow.history = krxData.customer_deposits.history;
+          }
+        } else if (item.ticker === 'CREDIT_BALANCE') {
+          if (krxData && krxData.credit_balance) {
+            dataRow.price = krxData.credit_balance.price;
+            dataRow.changeAmt = krxData.credit_balance.changeAmt;
+            dataRow.changePercent = krxData.credit_balance.changePercent;
+            dataRow.history = krxData.credit_balance.history;
+          }
+        } else if (item.ticker === 'MARGIN_CALL') {
+          if (krxData && krxData.margin_call) {
+            dataRow.price = krxData.margin_call.price;
+            dataRow.changeAmt = krxData.margin_call.changeAmt;
+            dataRow.changePercent = krxData.margin_call.changePercent;
+            dataRow.history = krxData.margin_call.history;
+          }
+        } else {
           try {
-            quote = (await yahooFinance.quote(item.ticker)) as any;
-          } catch (quoteErr) {
-            console.error(`Error fetching quote for ${item.ticker}:`, quoteErr);
-          }
-
-          const queryOptions = { period1: startDate, period2: endDate, interval: '1d' as const };
-          const result = (await yahooFinance.chart(item.ticker, queryOptions)) as any;
-          
-          if (result && result.quotes && result.quotes.length > 0) {
-            // Map the quotes to history, but if the close is null and it's the last element, patch it with the quote price!
-            const validQuotes = result.quotes.map((r: any, idx: number) => {
-              if (r.close === null && idx === result.quotes.length - 1 && quote && quote.regularMarketPrice) {
-                return { ...r, close: quote.regularMarketPrice };
-              }
-              return r;
-            }).filter((r: any) => r.close !== null && r.date !== undefined);
-            
-            if (validQuotes.length > 0) {
-              const historyClose = validQuotes.map((r: any) => ({
-                date: r.date.toISOString(),
-                value: r.close
-              }));
-              dataRow.history = historyClose.slice(-60);
-              
-              const last = validQuotes[validQuotes.length - 1];
-              
-              if (quote) {
-                dataRow.price = quote.regularMarketPrice ?? last.close;
-                dataRow.open = quote.regularMarketOpen ?? last.open;
-                dataRow.high = quote.regularMarketDayHigh ?? last.high;
-                dataRow.low = quote.regularMarketDayLow ?? last.low;
-                dataRow.close = quote.regularMarketPrice ?? last.close;
-                if (quote.regularMarketChange !== undefined) {
-                  dataRow.changeAmt = quote.regularMarketChange;
-                  dataRow.changePercent = quote.regularMarketChangePercent;
-                } else if (validQuotes.length >= 2) {
-                  const prev = validQuotes[validQuotes.length - 2];
-                  if (dataRow.price !== null && prev.close !== null) {
-                    dataRow.changeAmt = dataRow.price - prev.close;
-                    dataRow.changePercent = (dataRow.changeAmt / prev.close) * 100;
-                  }
-                }
-              } else {
-                dataRow.price = last.close;
-                dataRow.open = last.open;
-                dataRow.high = last.high;
-                dataRow.low = last.low;
-                dataRow.close = last.close;
-                if (validQuotes.length >= 2) {
-                  const prev = validQuotes[validQuotes.length - 2];
-                  if (last.close !== null && prev.close !== null) {
-                    dataRow.changeAmt = last.close - prev.close;
-                    dataRow.changePercent = (dataRow.changeAmt / prev.close) * 100;
-                  }
-                }
-              }
+            let quote: any = null;
+            try {
+              quote = (await yahooFinance.quote(item.ticker)) as any;
+            } catch (quoteErr) {
+              console.error(`Error fetching quote for ${item.ticker}:`, quoteErr);
             }
-          } else {
-             // Fallback to quote alone
-             const activeQuote = quote || (await yahooFinance.quote(item.ticker)) as any;
-             if (activeQuote && activeQuote.regularMarketPrice) {
-               dataRow.price = activeQuote.regularMarketPrice;
-               dataRow.open = activeQuote.regularMarketOpen || null;
-               dataRow.high = activeQuote.regularMarketDayHigh || null;
-               dataRow.low = activeQuote.regularMarketDayLow || null;
-               dataRow.close = activeQuote.regularMarketPrice;
-               if (activeQuote.regularMarketPreviousClose) {
-                 dataRow.changeAmt = activeQuote.regularMarketPrice - activeQuote.regularMarketPreviousClose;
-                 dataRow.changePercent = activeQuote.regularMarketChangePercent || ((dataRow.changeAmt / activeQuote.regularMarketPreviousClose) * 100);
+
+            const queryOptions = { period1: startDate, period2: endDate, interval: '1d' as const };
+            const result = (await yahooFinance.chart(item.ticker, queryOptions)) as any;
+            
+            if (result && result.quotes && result.quotes.length > 0) {
+              const validQuotes = result.quotes.map((r: any, idx: number) => {
+                if (r.close === null && idx === result.quotes.length - 1 && quote && quote.regularMarketPrice) {
+                  return { ...r, close: quote.regularMarketPrice };
+                }
+                return r;
+              }).filter((r: any) => r.close !== null && r.date !== undefined);
+              
+              if (validQuotes.length > 0) {
+                const historyClose = validQuotes.map((r: any) => ({
+                  date: r.date.toISOString(),
+                  value: r.close
+                }));
+                dataRow.history = historyClose.slice(-60);
+                
+                const last = validQuotes[validQuotes.length - 1];
+                
+                if (quote) {
+                  dataRow.price = quote.regularMarketPrice ?? last.close;
+                  dataRow.open = quote.regularMarketOpen ?? last.open;
+                  dataRow.high = quote.regularMarketDayHigh ?? last.high;
+                  dataRow.low = quote.regularMarketDayLow ?? last.low;
+                  dataRow.close = quote.regularMarketPrice ?? last.close;
+                  if (quote.regularMarketChange !== undefined) {
+                    dataRow.changeAmt = quote.regularMarketChange;
+                    dataRow.changePercent = quote.regularMarketChangePercent;
+                  } else if (validQuotes.length >= 2) {
+                    const prev = validQuotes[validQuotes.length - 2];
+                    if (dataRow.price !== null && prev.close !== null) {
+                      dataRow.changeAmt = dataRow.price - prev.close;
+                      dataRow.changePercent = (dataRow.changeAmt / prev.close) * 100;
+                    }
+                  }
+                } else {
+                  dataRow.price = last.close;
+                  dataRow.open = last.open;
+                  dataRow.high = last.high;
+                  dataRow.low = last.low;
+                  dataRow.close = last.close;
+                  if (validQuotes.length >= 2) {
+                    const prev = validQuotes[validQuotes.length - 2];
+                    if (last.close !== null && prev.close !== null) {
+                      dataRow.changeAmt = last.close - prev.close;
+                      dataRow.changePercent = (dataRow.changeAmt / prev.close) * 100;
+                    }
+                  }
+                }
+              }
+            } else {
+               const activeQuote = quote || (await yahooFinance.quote(item.ticker)) as any;
+               if (activeQuote && activeQuote.regularMarketPrice) {
+                 dataRow.price = activeQuote.regularMarketPrice;
+                 dataRow.open = activeQuote.regularMarketOpen || null;
+                 dataRow.high = activeQuote.regularMarketDayHigh || null;
+                 dataRow.low = activeQuote.regularMarketDayLow || null;
+                 dataRow.close = activeQuote.regularMarketPrice;
+                 if (activeQuote.regularMarketPreviousClose) {
+                   dataRow.changeAmt = activeQuote.regularMarketPrice - activeQuote.regularMarketPreviousClose;
+                   dataRow.changePercent = activeQuote.regularMarketChangePercent || ((dataRow.changeAmt / activeQuote.regularMarketPreviousClose) * 100);
+                 }
                }
-             }
+            }
+          } catch (e) {
+            console.error(`Error fetching ${item.ticker}:`, e);
           }
-        } catch (e) {
-          console.error(`Error fetching ${item.ticker}:`, e);
         }
-      }
 
-      // Set stale flag for KRX cache-based indicators
-      const isKrxCacheIndicator = [
-        'KOSPI200_NIGHT', 'KOSPI200_FUTURES', 'KOSPI_RSI', 'ADR_INFO',
-        'KOSPI_PER', 'KOSPI_PBR', 'KOSPI_TRADE_VALUE',
-        'CUSTOMER_DEPOSITS', 'CREDIT_BALANCE', 'MARGIN_CALL'
-      ].includes(item.ticker);
-      
-      if (isKrxCacheIndicator) {
-        dataRow.isStale = isKrxStale;
-      } else {
-        dataRow.isStale = false;
-      }
-
-      results.push(dataRow);
-    }
+        return dataRow;
+      })
+    );
     
     return NextResponse.json(results, {
       headers: {
-        'Cache-Control': 'public, s-maxage=1800, stale-while-revalidate=86400'
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0'
       }
     });
   } catch (error) {

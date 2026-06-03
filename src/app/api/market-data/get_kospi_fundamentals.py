@@ -7,6 +7,8 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 
+import re
+
 # Load KRX environment variables
 krx_env_path = r"D:\AI Investing\KRXdata\.env"
 load_dotenv(krx_env_path)
@@ -72,12 +74,22 @@ def get_naver_futures():
     price_val = None
     change_val = None
     pct_val = None
+    quote_date_str = None
     
     try:
         url_curr = "https://finance.naver.com/sise/sise_index.naver?code=FUT"
         res_curr = requests.get(url_curr, headers=headers, timeout=5)
         if res_curr.status_code == 200:
             soup_curr = BeautifulSoup(res_curr.content, "html.parser", from_encoding="euc-kr")
+            
+            # Parse quote date from time span
+            time_span = soup_curr.find("span", id="time")
+            if time_span:
+                time_text = time_span.get_text()
+                match = re.search(r"(\d{4})\.(\d{2})\.(\d{2})", time_text)
+                if match:
+                    quote_date_str = f"{match.group(1)}-{match.group(2)}-{match.group(3)}"
+            
             for tr in soup_curr.find_all("tr"):
                 cells = tr.find_all(["th", "td"])
                 texts = [c.get_text(strip=True) for c in cells]
@@ -121,21 +133,30 @@ def get_naver_futures():
             change_val = price_val - prev_close
             pct_val = (change_val / prev_close) * 100 if prev_close != 0 else 0.0
             
-    # merge current into history if it's newer than latest historical date
-    today_str = datetime.now().strftime("%Y-%m-%d")
     latest_hist_str = latest_hist_date.strftime("%Y-%m-%d")
     
     df_60 = df.tail(60)
     history_list = [{"date": dt.strftime("%Y-%m-%dT00:00:00.000Z"), "value": round(float(row["Close"]), 2)} for dt, row in df_60.iterrows()]
     
-    # if today is newer, we can append it or update the last element
-    if today_str > latest_hist_str:
+    # Fallback quote_date_str if none parsed (only on weekdays after 9am)
+    if quote_date_str is None:
+        now = datetime.now()
+        if now.weekday() < 5 and now.hour >= 9:
+            quote_date_str = now.strftime("%Y-%m-%d")
+        else:
+            quote_date_str = latest_hist_str
+
+    # Decide whether to append or update history
+    if quote_date_str > latest_hist_str:
         history_list.append({
-            "date": datetime.now().strftime("%Y-%m-%dT00:00:00.000Z"),
+            "date": datetime.strptime(quote_date_str, "%Y-%m-%d").strftime("%Y-%m-%dT00:00:00.000Z"),
             "value": price_val
         })
         if len(history_list) > 60:
             history_list = history_list[-60:]
+    elif quote_date_str == latest_hist_str:
+        if history_list:
+            history_list[-1]["value"] = price_val
             
     return {
         "price": price_val,
@@ -148,6 +169,99 @@ def get_naver_futures():
         "history": history_list
     }
 
+def fetch_kofia_deposits_credit(start_date, end_date):
+    url = "https://freesis.kofia.or.kr/meta/getMetaDataList.do"
+    headers = {
+        "Content-Type": "application/json; charset=UTF-8",
+        "Referer": "https://freesis.kofia.or.kr/stat/FreeSIS.do",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "X-Requested-With": "XMLHttpRequest"
+    }
+    
+    deposit_map = {}
+    payload_dep = {
+        "dmSearch": {
+            "tmpV40": "1000000",
+            "tmpV41": "1",
+            "tmpV1": "D",
+            "tmpV45": start_date,
+            "tmpV46": end_date,
+            "OBJ_NM": "STATSCU0100000060BO"
+        }
+    }
+    try:
+        res_dep = requests.post(url, headers=headers, json=payload_dep, timeout=10)
+        if res_dep.status_code == 200:
+            items = res_dep.json().get("ds1", [])
+            for item in items:
+                date_raw = str(item.get("TMPV1"))
+                if len(date_raw) == 8:
+                    date_str = f"{date_raw[0:4]}-{date_raw[4:6]}-{date_raw[6:8]}"
+                    val = float(item.get("TMPV2", 0)) * 0.01
+                    deposit_map[date_str] = round(val, 2)
+    except Exception as e:
+        print(f"Error fetching KOFIA deposits: {e}", file=sys.stderr)
+                
+    credit_map = {}
+    payload_cred = {
+        "dmSearch": {
+            "tmpV40": "1000000",
+            "tmpV41": "1",
+            "tmpV1": "D",
+            "tmpV45": start_date,
+            "tmpV46": end_date,
+            "OBJ_NM": "STATSCU0100000070BO"
+        }
+    }
+    try:
+        res_cred = requests.post(url, headers=headers, json=payload_cred, timeout=10)
+        if res_cred.status_code == 200:
+            items = res_cred.json().get("ds1", [])
+            for item in items:
+                date_raw = str(item.get("TMPV1"))
+                if len(date_raw) == 8:
+                    date_str = f"{date_raw[0:4]}-{date_raw[4:6]}-{date_raw[6:8]}"
+                    val = float(item.get("TMPV2", 0)) * 0.01
+                    credit_map[date_str] = round(val, 2)
+    except Exception as e:
+        print(f"Error fetching KOFIA credit: {e}", file=sys.stderr)
+                
+    return deposit_map, credit_map
+
+def fetch_kofia_liquidation(start_date, end_date):
+    url = "https://freesis.kofia.or.kr/meta/getMetaDataList.do"
+    headers = {
+        "Content-Type": "application/json; charset=UTF-8",
+        "Referer": "https://freesis.kofia.or.kr/stat/FreeSIS.do",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "X-Requested-With": "XMLHttpRequest"
+    }
+    
+    liq_map = {}
+    payload = {
+        "dmSearch": {
+            "tmpV40": "1000000",
+            "tmpV41": "1",
+            "tmpV1": "D",
+            "tmpV45": start_date,
+            "tmpV46": end_date,
+            "OBJ_NM": "STATSCU0100000060BO"
+        }
+    }
+    try:
+        res = requests.post(url, headers=headers, json=payload, timeout=10)
+        if res.status_code == 200:
+            items = res.json().get("ds1", [])
+            for item in items:
+                date_raw = str(item.get("TMPV1"))
+                if len(date_raw) == 8:
+                    date_str = f"{date_raw[0:4]}-{date_raw[4:6]}-{date_raw[6:8]}"
+                    val = float(item.get("TMPV6", 0)) * 0.01
+                    liq_map[date_str] = round(val, 2)
+    except Exception as e:
+        print(f"Error fetching KOFIA liquidation: {e}", file=sys.stderr)
+    return liq_map
+
 def main():
     try:
         today = datetime.now()
@@ -155,6 +269,51 @@ def main():
         start_date = (today - timedelta(days=120)).strftime("%Y%m%d")
         end_date = today.strftime("%Y%m%d")
         
+        # ==========================================
+        # 0. Directly Fetch KOFIA & Update Shared JSON Files
+        # ==========================================
+        try:
+            today_k = datetime.now()
+            start_date_k = (today_k - timedelta(days=15)).strftime("%Y%m%d")
+            end_date_k = today_k.strftime("%Y%m%d")
+            
+            # Fetch deposits & credit
+            deposit_map, credit_map = fetch_kofia_deposits_credit(start_date_k, end_date_k)
+            dep_path = r"D:\AI Investing\Daily_Check_K\deposits_history.json"
+            if os.path.exists(dep_path):
+                with open(dep_path, "r", encoding="utf-8") as f:
+                    dep_history = json.load(f)
+                hist_map = {item['date']: item for item in dep_history}
+                common_dates = set(deposit_map.keys()) & set(credit_map.keys())
+                for d_str in common_dates:
+                    hist_map[d_str] = {
+                        'date': d_str,
+                        'deposit': deposit_map[d_str],
+                        'credit': credit_map[d_str]
+                    }
+                new_dep_history = list(hist_map.values())
+                new_dep_history.sort(key=lambda x: x['date'])
+                new_dep_history = new_dep_history[-100:]
+                with open(dep_path, "w", encoding="utf-8") as f:
+                    json.dump(new_dep_history, f, indent=4)
+            
+            # Fetch liquidation
+            liq_map = fetch_kofia_liquidation(start_date_k, end_date_k)
+            liq_path = r"D:\AI Investing\Daily_Check_K\liquidation_history.json"
+            if os.path.exists(liq_path):
+                with open(liq_path, "r", encoding="utf-8") as f:
+                    liq_history = json.load(f)
+                hist_map_liq = {item['date']: item['liquidation'] for item in liq_history}
+                for d_str, val in liq_map.items():
+                    hist_map_liq[d_str] = val
+                new_liq_history = [{"date": d, "liquidation": v} for d, v in hist_map_liq.items()]
+                new_liq_history.sort(key=lambda x: x['date'])
+                new_liq_history = new_liq_history[-100:]
+                with open(liq_path, "w", encoding="utf-8") as f:
+                    json.dump(new_liq_history, f, indent=4)
+        except Exception as kofia_err:
+            print(f"Error updating KOFIA data in background scraper: {kofia_err}", file=sys.stderr)
+
         result = {}
 
         # ==========================================
@@ -359,8 +518,17 @@ def main():
                 except Exception:
                     pass
 
-                # Get today's local date
-                today_str = datetime.now().strftime("%Y-%m-%d")
+                # Get session date from live cache if available
+                session_date_str = None
+                if has_live and len(pts) > 0:
+                    try:
+                        from datetime import timezone
+                        ts = pts[-1][0] / 1000.0
+                        dt_kst = datetime.fromtimestamp(ts, timezone(timedelta(hours=9)))
+                        session_date_str = dt_kst.strftime("%Y-%m-%d")
+                    except Exception:
+                        pass
+
                 last_hist_date = night_data[-1]['date']
                 
                 night_60 = night_data[-60:]
@@ -382,19 +550,22 @@ def main():
 
                 if has_live:
                     current_price = close_p
-                    if today_str > last_hist_date:
-                        # Case 1: Live session has ended/is active but not yet written to history file
+                    if session_date_str and session_date_str > last_hist_date:
+                        # Case 1: Live session is newer than history, append it
                         prev_price = latest_night_from_file
-                        night_history.append({"date": format_iso_date(today_str), "value": round(current_price, 2)})
+                        night_history.append({"date": format_iso_date(session_date_str), "value": round(current_price, 2)})
                         if len(night_history) > 60:
                             night_history = night_history[-60:]
-                    else:
-                        # Case 2: Today's session is already written to history file
-                        prev_price = round(float(night_data[-2]['price']), 2)
+                    elif session_date_str == last_hist_date:
+                        # Case 2: Today's session is already written to history file, update it
+                        prev_price = round(float(night_data[-2]['price']), 2) if len(night_data) >= 2 else latest_night_from_file
                         night_history[-1]['value'] = round(current_price, 2)
+                    else:
+                        # Case 3: No new live data or it is older than history
+                        prev_price = round(float(night_data[-2]['price']), 2) if len(night_data) >= 2 else latest_night_from_file
                 else:
                     current_price = latest_night_from_file
-                    prev_price = round(float(night_data[-2]['price']), 2)
+                    prev_price = round(float(night_data[-2]['price']), 2) if len(night_data) >= 2 else latest_night_from_file
                 
                 # Reference price for change and changePercent calculations is the daytime futures price
                 change_base_price = futures_price_ref if futures_price_ref is not None else prev_price
