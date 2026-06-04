@@ -16,9 +16,9 @@ export function Dashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("US Market");
 
-  const fetchData = async (refresh = false) => {
+  const fetchData = async (refresh = false, retryCount = 0, isSilent = false) => {
     try {
-      if (refresh) setIsRefreshing(true);
+      if (refresh && !isSilent) setIsRefreshing(true);
       const res = await fetch("/api/market-data", {
         cache: refresh ? "no-store" : "default",
       });
@@ -28,11 +28,12 @@ export function Dashboard() {
       setLastUpdated(new Date());
       setError(null);
 
-      // If any of the fetched data is stale, trigger a silent background re-fetch after 4 seconds
-      // to pull the newly updated cache without blocking the user
-      if (!refresh && result.some(item => item.isStale)) {
+      // If any of the fetched data is stale and we haven't exceeded 5 retries (20 seconds total),
+      // trigger a silent background re-fetch after 4 seconds to check if the cache update finished.
+      const hasStale = result.some(item => item.isStale);
+      if (hasStale && retryCount < 5) {
         setTimeout(() => {
-          fetchData(true);
+          fetchData(true, retryCount + 1, true);
         }, 4000);
       }
     } catch (err: any) {

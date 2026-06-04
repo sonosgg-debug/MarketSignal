@@ -190,7 +190,7 @@ def fetch_kofia_deposits_credit(start_date, end_date):
         }
     }
     try:
-        res_dep = requests.post(url, headers=headers, json=payload_dep, timeout=10)
+        res_dep = requests.post(url, headers=headers, json=payload_dep, timeout=5)
         if res_dep.status_code == 200:
             items = res_dep.json().get("ds1", [])
             for item in items:
@@ -214,7 +214,7 @@ def fetch_kofia_deposits_credit(start_date, end_date):
         }
     }
     try:
-        res_cred = requests.post(url, headers=headers, json=payload_cred, timeout=10)
+        res_cred = requests.post(url, headers=headers, json=payload_cred, timeout=5)
         if res_cred.status_code == 200:
             items = res_cred.json().get("ds1", [])
             for item in items:
@@ -249,7 +249,7 @@ def fetch_kofia_liquidation(start_date, end_date):
         }
     }
     try:
-        res = requests.post(url, headers=headers, json=payload, timeout=10)
+        res = requests.post(url, headers=headers, json=payload, timeout=5)
         if res.status_code == 200:
             items = res.json().get("ds1", [])
             for item in items:
