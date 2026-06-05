@@ -1,13 +1,14 @@
 import os
 import sys
 import json
+import time
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
+import concurrent.futures
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
-
 import re
+from dotenv import load_dotenv
 
 # Load KRX environment variables
 krx_env_path = r"D:\AI Investing\KRXdata\.env"
@@ -27,18 +28,30 @@ def format_iso_date(date_str):
         dt = date_str
     return dt.strftime("%Y-%m-%dT00:00:00.000Z")
 
+def fetch_page(page, headers):
+    url = f"https://finance.naver.com/sise/sise_index_day.naver?code=FUT&page={page}"
+    try:
+        res = requests.get(url, headers=headers, timeout=5)
+        if res.status_code == 200:
+            return res.content
+    except Exception:
+        pass
+    return None
+
 def get_naver_futures():
     data_list = []
     headers = {"User-Agent": "Mozilla/5.0"}
     
-    # 1. Scrape history (11 pages)
-    for page in range(1, 12):
-        url = f"https://finance.naver.com/sise/sise_index_day.naver?code=FUT&page={page}"
+    # 1. Scrape history in parallel (11 pages)
+    pages = list(range(1, 12))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=11) as executor:
+        contents = list(executor.map(lambda p: fetch_page(p, headers), pages))
+        
+    for content in contents:
+        if not content:
+            continue
         try:
-            res = requests.get(url, headers=headers, timeout=5)
-            if res.status_code != 200:
-                continue
-            soup = BeautifulSoup(res.content.decode("euc-kr", "replace"), "html.parser")
+            soup = BeautifulSoup(content.decode("euc-kr", "replace"), "html.parser")
             table = soup.find("table", class_="type_1")
             if not table:
                 continue
@@ -102,7 +115,8 @@ def get_naver_futures():
                         val_str = "".join(c for c in texts[idx+1] if c.isdigit() or c == ".")
                         if val_str:
                             change_val = float(val_str)
-                            if "-" in texts[idx+1] or "하락" in texts[idx+1]:
+                            # Fixed down arrow character check: '▼' and '↓' indicate a negative change
+                            if "-" in texts[idx+1] or "하락" in texts[idx+1] or "▼" in texts[idx+1] or "↓" in texts[idx+1]:
                                 change_val = -change_val
                     elif "고가" in text:
                         high_val = float(texts[idx+1].replace(",", ""))
@@ -262,63 +276,52 @@ def fetch_kofia_liquidation(start_date, end_date):
         print(f"Error fetching KOFIA liquidation: {e}", file=sys.stderr)
     return liq_map
 
-def main():
+def task_kofia_preload():
     try:
-        today = datetime.now()
-        # Fetch 120 days of data to easily secure at least 60 trading days of history
-        start_date = (today - timedelta(days=120)).strftime("%Y%m%d")
-        end_date = today.strftime("%Y%m%d")
+        today_k = datetime.now()
+        start_date_k = (today_k - timedelta(days=15)).strftime("%Y%m%d")
+        end_date_k = today_k.strftime("%Y%m%d")
         
-        # ==========================================
-        # 0. Directly Fetch KOFIA & Update Shared JSON Files
-        # ==========================================
-        try:
-            today_k = datetime.now()
-            start_date_k = (today_k - timedelta(days=15)).strftime("%Y%m%d")
-            end_date_k = today_k.strftime("%Y%m%d")
-            
-            # Fetch deposits & credit
-            deposit_map, credit_map = fetch_kofia_deposits_credit(start_date_k, end_date_k)
-            dep_path = r"D:\AI Investing\Daily_Check_K\deposits_history.json"
-            if os.path.exists(dep_path):
-                with open(dep_path, "r", encoding="utf-8") as f:
-                    dep_history = json.load(f)
-                hist_map = {item['date']: item for item in dep_history}
-                common_dates = set(deposit_map.keys()) & set(credit_map.keys())
-                for d_str in common_dates:
-                    hist_map[d_str] = {
-                        'date': d_str,
-                        'deposit': deposit_map[d_str],
-                        'credit': credit_map[d_str]
-                    }
-                new_dep_history = list(hist_map.values())
-                new_dep_history.sort(key=lambda x: x['date'])
-                new_dep_history = new_dep_history[-100:]
-                with open(dep_path, "w", encoding="utf-8") as f:
-                    json.dump(new_dep_history, f, indent=4)
-            
-            # Fetch liquidation
-            liq_map = fetch_kofia_liquidation(start_date_k, end_date_k)
-            liq_path = r"D:\AI Investing\Daily_Check_K\liquidation_history.json"
-            if os.path.exists(liq_path):
-                with open(liq_path, "r", encoding="utf-8") as f:
-                    liq_history = json.load(f)
-                hist_map_liq = {item['date']: item['liquidation'] for item in liq_history}
-                for d_str, val in liq_map.items():
-                    hist_map_liq[d_str] = val
-                new_liq_history = [{"date": d, "liquidation": v} for d, v in hist_map_liq.items()]
-                new_liq_history.sort(key=lambda x: x['date'])
-                new_liq_history = new_liq_history[-100:]
-                with open(liq_path, "w", encoding="utf-8") as f:
-                    json.dump(new_liq_history, f, indent=4)
-        except Exception as kofia_err:
-            print(f"Error updating KOFIA data in background scraper: {kofia_err}", file=sys.stderr)
+        # Fetch deposits & credit
+        deposit_map, credit_map = fetch_kofia_deposits_credit(start_date_k, end_date_k)
+        dep_path = r"D:\AI Investing\Daily_Check_K\deposits_history.json"
+        if os.path.exists(dep_path):
+            with open(dep_path, "r", encoding="utf-8") as f:
+                dep_history = json.load(f)
+            hist_map = {item['date']: item for item in dep_history}
+            common_dates = set(deposit_map.keys()) & set(credit_map.keys())
+            for d_str in common_dates:
+                hist_map[d_str] = {
+                    'date': d_str,
+                    'deposit': deposit_map[d_str],
+                    'credit': credit_map[d_str]
+                }
+            new_dep_history = list(hist_map.values())
+            new_dep_history.sort(key=lambda x: x['date'])
+            new_dep_history = new_dep_history[-100:]
+            with open(dep_path, "w", encoding="utf-8") as f:
+                json.dump(new_dep_history, f, indent=4)
+        
+        # Fetch liquidation
+        liq_map = fetch_kofia_liquidation(start_date_k, end_date_k)
+        liq_path = r"D:\AI Investing\Daily_Check_K\liquidation_history.json"
+        if os.path.exists(liq_path):
+            with open(liq_path, "r", encoding="utf-8") as f:
+                liq_history = json.load(f)
+            hist_map_liq = {item['date']: item['liquidation'] for item in liq_history}
+            for d_str, val in liq_map.items():
+                hist_map_liq[d_str] = val
+            new_liq_history = [{"date": d, "liquidation": v} for d, v in hist_map_liq.items()]
+            new_liq_history.sort(key=lambda x: x['date'])
+            new_liq_history = new_liq_history[-100:]
+            with open(liq_path, "w", encoding="utf-8") as f:
+                json.dump(new_liq_history, f, indent=4)
+    except Exception as kofia_err:
+        print(f"Error updating KOFIA data in background scraper: {kofia_err}", file=sys.stderr)
 
-        result = {}
-
-        # ==========================================
-        # 1. Fetch KOSPI Fundamentals (PER, PBR)
-        # ==========================================
+def task_fundamentals(start_date, end_date):
+    result = {}
+    try:
         df_fund = stock.get_index_fundamental(start_date, end_date, "1001")
         if df_fund is not None and not df_fund.empty:
             df_fund_filtered = df_fund[(df_fund['PER'] != 0) & (df_fund['PBR'] != 0)].copy()
@@ -352,10 +355,13 @@ def main():
                     "changePercent": pbr_pct,
                     "history": pbr_history
                 }
+    except Exception as e:
+        print(f"Error in task_fundamentals: {e}", file=sys.stderr)
+    return result
 
-        # ==========================================
-        # 2. Fetch KOSPI Trading Value & Calculate KOSPI RSI(14)
-        # ==========================================
+def task_ohlcv_rsi(start_date, end_date):
+    result = {}
+    try:
         df_ohlcv = stock.get_index_ohlcv_by_date(start_date, end_date, "1001")
         if df_ohlcv is not None and not df_ohlcv.empty:
             # Find 거래대금 column
@@ -365,9 +371,7 @@ def main():
                     col_name = col
                     break
             if col_name:
-                # Divide by 100,000,000 to convert to '억원'
                 val_series = df_ohlcv[col_name] / 100000000
-                # Filter out zeros or nulls
                 val_series = val_series[val_series > 0].copy()
                 if len(val_series) >= 2:
                     val_60 = val_series.tail(60)
@@ -408,10 +412,14 @@ def main():
                         "changePercent": rsi_pct,
                         "history": history_rsi
                     }
+    except Exception as e:
+        print(f"Error in task_ohlcv_rsi: {e}", file=sys.stderr)
+    return result
 
-        # ==========================================
-        # 3. Read Customer Deposits & Credit Balance
-        # ==========================================
+def task_local_kofia_adr():
+    result = {}
+    try:
+        # Read Customer Deposits & Credit Balance
         dep_path = r"D:\AI Investing\Daily_Check_K\deposits_history.json"
         if os.path.exists(dep_path):
             with open(dep_path, "r", encoding="utf-8") as f:
@@ -447,9 +455,7 @@ def main():
                     "history": cred_history
                 }
 
-        # ==========================================
-        # 4. Read Margin Call / Liquidation Amount
-        # ==========================================
+        # Read Margin Call / Liquidation Amount
         liq_path = r"D:\AI Investing\Daily_Check_K\liquidation_history.json"
         if os.path.exists(liq_path):
             with open(liq_path, "r", encoding="utf-8") as f:
@@ -469,123 +475,7 @@ def main():
                     "history": liq_history
                 }
 
-        # ==========================================
-        # 4-5. Fetch KOSPI200 Futures (Pre-fetch for Night Futures reference price)
-        # ==========================================
-        futures_price_ref = None
-        try:
-            futures_data = get_naver_futures()
-            if futures_data:
-                result["kospi200_futures"] = futures_data
-                futures_price_ref = futures_data.get("price")
-        except Exception:
-            pass
-
-        # ==========================================
-        # 5. Read KOSPI200 Night Futures
-        # ==========================================
-        night_path = r"D:\AI Investing\Daily_Check\DailyData\kospif_ngt_history.json"
-        if os.path.exists(night_path):
-            with open(night_path, "r", encoding="utf-8") as f:
-                night_data = json.load(f)
-            if night_data and len(night_data) >= 2:
-                # Fetch KOSPI200 Night Futures live cache to get Open, High, Low, Close for daily candle
-                latest_night_from_file = round(float(night_data[-1]['price']), 2)
-                
-                open_p = latest_night_from_file
-                high_p = latest_night_from_file
-                low_p = latest_night_from_file
-                close_p = latest_night_from_file
-                has_live = False
-                
-                try:
-                    cache_url = "https://esignal.co.kr/data/cache/kospif_ngt.js"
-                    cache_headers = {
-                        'User-Agent': 'Mozilla/5.0',
-                        'Referer': 'https://esignal.co.kr/kospi200-futures-night/'
-                    }
-                    r_cache = requests.get(cache_url, headers=cache_headers, timeout=5)
-                    if r_cache.status_code == 200:
-                        cache_json = r_cache.json()
-                        open_p = float(cache_json.get('open', latest_night_from_file))
-                        pts = cache_json.get('data', [])
-                        if len(pts) > 0:
-                            prices = [float(pt[1]) for pt in pts]
-                            high_p = max(prices)
-                            low_p = min(prices)
-                            close_p = prices[-1]
-                            has_live = True
-                except Exception:
-                    pass
-
-                # Get session date from live cache if available
-                session_date_str = None
-                if has_live and len(pts) > 0:
-                    try:
-                        from datetime import timezone
-                        ts = pts[-1][0] / 1000.0
-                        dt_kst = datetime.fromtimestamp(ts, timezone(timedelta(hours=9)))
-                        session_date_str = dt_kst.strftime("%Y-%m-%d")
-                    except Exception:
-                        pass
-
-                last_hist_date = night_data[-1]['date']
-                
-                night_60 = night_data[-60:]
-                night_history = [{"date": format_iso_date(item['date']), "value": round(float(item['price']), 2)} for item in night_60]
-                
-                # Determine reference price for change calculation (compares to daytime futures closing price)
-                # If not fetched in this run, try to load from the existing cache
-                if futures_price_ref is None:
-                    try:
-                        script_dir = os.path.dirname(os.path.abspath(__file__))
-                        cache_path = os.path.join(script_dir, 'krx_cache.json')
-                        if os.path.exists(cache_path):
-                            with open(cache_path, 'r', encoding='utf-8') as f_old:
-                                old_cache = json.load(f_old)
-                                if isinstance(old_cache, dict):
-                                    futures_price_ref = old_cache.get("kospi200_futures", {}).get("price")
-                    except Exception:
-                        pass
-
-                if has_live:
-                    current_price = close_p
-                    if session_date_str and session_date_str > last_hist_date:
-                        # Case 1: Live session is newer than history, append it
-                        prev_price = latest_night_from_file
-                        night_history.append({"date": format_iso_date(session_date_str), "value": round(current_price, 2)})
-                        if len(night_history) > 60:
-                            night_history = night_history[-60:]
-                    elif session_date_str == last_hist_date:
-                        # Case 2: Today's session is already written to history file, update it
-                        prev_price = round(float(night_data[-2]['price']), 2) if len(night_data) >= 2 else latest_night_from_file
-                        night_history[-1]['value'] = round(current_price, 2)
-                    else:
-                        # Case 3: No new live data or it is older than history
-                        prev_price = round(float(night_data[-2]['price']), 2) if len(night_data) >= 2 else latest_night_from_file
-                else:
-                    current_price = latest_night_from_file
-                    prev_price = round(float(night_data[-2]['price']), 2) if len(night_data) >= 2 else latest_night_from_file
-                
-                # Reference price for change and changePercent calculations is the daytime futures price
-                change_base_price = futures_price_ref if futures_price_ref is not None else prev_price
-                night_change = round(current_price - change_base_price, 2)
-                night_pct = round((night_change / change_base_price) * 100, 2) if change_base_price != 0 else 0.0
-                
-                result["kospi200_night"] = {
-                    "price": round(current_price, 2),
-                    "changeAmt": night_change,
-                    "changePercent": night_pct,
-                    "history": night_history,
-                    "open": round(open_p, 2),
-                    "high": round(high_p, 2),
-                    "low": round(low_p, 2),
-                    "close": round(close_p, 2)
-                }
-
-        # ==========================================
-        # 6. Read & Compute KOSPI ADR(20, %)
-        # ==========================================
+        # Read & Compute KOSPI ADR(20, %)
         adr_path = r"D:\AI Investing\Daily_Check_K\adv_dec_history.json"
         if os.path.exists(adr_path):
             with open(adr_path, "r", encoding="utf-8") as f:
@@ -617,9 +507,163 @@ def main():
                         "changePercent": adr_pct,
                         "history": adr_history
                     }
+    except Exception as e:
+        print(f"Error in task_local_kofia_adr: {e}", file=sys.stderr)
+    return result
 
+def task_night_futures(futures_price_ref):
+    result = {}
+    try:
+        night_path = r"D:\AI Investing\Daily_Check\DailyData\kospif_ngt_history.json"
+        if os.path.exists(night_path):
+            with open(night_path, "r", encoding="utf-8") as f:
+                night_data = json.load(f)
+            if night_data and len(night_data) >= 2:
+                latest_night_from_file = round(float(night_data[-1]['price']), 2)
+                
+                open_p = latest_night_from_file
+                high_p = latest_night_from_file
+                low_p = latest_night_from_file
+                close_p = latest_night_from_file
+                has_live = False
+                pts = []
+                
+                try:
+                    cache_url = "https://esignal.co.kr/data/cache/kospif_ngt.js"
+                    cache_headers = {
+                        'User-Agent': 'Mozilla/5.0',
+                        'Referer': 'https://esignal.co.kr/kospi200-futures-night/'
+                    }
+                    r_cache = requests.get(cache_url, headers=cache_headers, timeout=5)
+                    if r_cache.status_code == 200:
+                        cache_json = r_cache.json()
+                        open_p = float(cache_json.get('open', latest_night_from_file))
+                        pts = cache_json.get('data', [])
+                        if len(pts) > 0:
+                            prices = [float(pt[1]) for pt in pts]
+                            high_p = max(prices)
+                            low_p = min(prices)
+                            close_p = prices[-1]
+                            has_live = True
+                except Exception:
+                    pass
+
+                session_date_str = None
+                if has_live and len(pts) > 0:
+                    try:
+                        from datetime import timezone
+                        ts = pts[-1][0] / 1000.0
+                        dt_kst = datetime.fromtimestamp(ts, timezone(timedelta(hours=9)))
+                        session_date_str = dt_kst.strftime("%Y-%m-%d")
+                    except Exception:
+                        pass
+
+                last_hist_date = night_data[-1]['date']
+                
+                night_60 = night_data[-60:]
+                night_history = [{"date": format_iso_date(item['date']), "value": round(float(item['price']), 2)} for item in night_60]
+                
+                if futures_price_ref is None:
+                    try:
+                        script_dir = os.path.dirname(os.path.abspath(__file__))
+                        cache_path = os.path.join(script_dir, 'krx_cache.json')
+                        if os.path.exists(cache_path):
+                            with open(cache_path, 'r', encoding='utf-8') as f_old:
+                                old_cache = json.load(f_old)
+                                if isinstance(old_cache, dict):
+                                    futures_price_ref = old_cache.get("kospi200_futures", {}).get("price")
+                    except Exception:
+                        pass
+
+                if has_live:
+                    current_price = close_p
+                    if session_date_str and session_date_str > last_hist_date:
+                        prev_price = latest_night_from_file
+                        night_history.append({"date": format_iso_date(session_date_str), "value": round(current_price, 2)})
+                        if len(night_history) > 60:
+                            night_history = night_history[-60:]
+                    elif session_date_str == last_hist_date:
+                        prev_price = round(float(night_data[-2]['price']), 2) if len(night_data) >= 2 else latest_night_from_file
+                        night_history[-1]['value'] = round(current_price, 2)
+                    else:
+                        prev_price = round(float(night_data[-2]['price']), 2) if len(night_data) >= 2 else latest_night_from_file
+                else:
+                    current_price = latest_night_from_file
+                    prev_price = round(float(night_data[-2]['price']), 2) if len(night_data) >= 2 else latest_night_from_file
+                
+                change_base_price = futures_price_ref if futures_price_ref is not None else prev_price
+                night_change = round(current_price - change_base_price, 2)
+                night_pct = round((night_change / change_base_price) * 100, 2) if change_base_price != 0 else 0.0
+                
+                result["kospi200_night"] = {
+                    "price": round(current_price, 2),
+                    "changeAmt": night_change,
+                    "changePercent": night_pct,
+                    "history": night_history,
+                    "open": round(open_p, 2),
+                    "high": round(high_p, 2),
+                    "low": round(low_p, 2),
+                    "close": round(close_p, 2)
+                }
+    except Exception as e:
+        print(f"Error in task_night_futures: {e}", file=sys.stderr)
+    return result
+
+def main():
+    try:
+        today = datetime.now()
+        start_date = (today - timedelta(days=120)).strftime("%Y%m%d")
+        end_date = today.strftime("%Y%m%d")
+        
+        result = {}
+        
+        # Parallel Execution using ThreadPoolExecutor
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            # 1. Run KOFIA Preload, Naver Futures, fundamentals, and ohlcv in parallel
+            future_preload = executor.submit(task_kofia_preload)
+            future_futures = executor.submit(get_naver_futures)
+            future_fundamentals = executor.submit(task_fundamentals, start_date, end_date)
+            future_ohlcv_rsi = executor.submit(task_ohlcv_rsi, start_date, end_date)
+            
+            # Wait for KOFIA preload to finish before executing task_local_kofia_adr
+            future_preload.result()
+            
+            # Run local reading task in parallel now that preload is done
+            future_local = executor.submit(task_local_kofia_adr)
+            
+            # Gather results
+            try:
+                f_data = future_futures.result()
+                if f_data:
+                    result["kospi200_futures"] = f_data
+            except Exception as e:
+                print(f"Error fetching Naver futures in thread: {e}", file=sys.stderr)
+                
+            try:
+                fund_data = future_fundamentals.result()
+                result.update(fund_data)
+            except Exception as e:
+                print(f"Error fetching fundamentals in thread: {e}", file=sys.stderr)
+                
+            try:
+                ohlcv_data = future_ohlcv_rsi.result()
+                result.update(ohlcv_data)
+            except Exception as e:
+                print(f"Error fetching ohlcv in thread: {e}", file=sys.stderr)
+                
+            try:
+                local_data = future_local.result()
+                result.update(local_data)
+            except Exception as e:
+                print(f"Error fetching local data in thread: {e}", file=sys.stderr)
+
+        # 2. Run night futures afterwards (since it relies on futures price)
+        futures_price_ref = result.get("kospi200_futures", {}).get("price")
+        night_data = task_night_futures(futures_price_ref)
+        result.update(night_data)
+        
         # ==========================================
-        # 8. Write results to krx_cache.json
+        # Write results to krx_cache.json
         # ==========================================
         script_dir = os.path.dirname(os.path.abspath(__file__))
         cache_path = os.path.join(script_dir, 'krx_cache.json')

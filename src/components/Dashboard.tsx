@@ -28,10 +28,10 @@ export function Dashboard() {
       setLastUpdated(new Date());
       setError(null);
 
-      // If any of the fetched data is stale and we haven't exceeded 5 retries (20 seconds total),
+      // If any of the fetched data is stale and we haven't exceeded 8 retries (32 seconds total),
       // trigger a silent background re-fetch after 4 seconds to check if the cache update finished.
       const hasStale = result.some(item => item.isStale);
-      if (hasStale && retryCount < 5) {
+      if (hasStale && retryCount < 8) {
         setTimeout(() => {
           fetchData(true, retryCount + 1, true);
         }, 4000);
