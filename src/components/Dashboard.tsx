@@ -91,6 +91,7 @@ export function Dashboard() {
       item.ticker === "CREDIT_BALANCE" || 
       item.ticker === "MARGIN_CALL" || 
       item.ticker === "KOSPI200_NIGHT" || 
+      item.ticker === "KOSPI_ADR_CHART" || 
       item.ticker === "CDS_KOREA" || 
       item.ticker === "FX_RESERVES";
     

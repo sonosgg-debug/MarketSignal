@@ -34,8 +34,9 @@ const TICKERS = [
   { id: '25', name: '신용공여 잔고 (단위:억원)', ticker: 'CREDIT_BALANCE' },
   { id: '26', name: '반대매매금액 (단위:억원)', ticker: 'MARGIN_CALL', negativeFavorable: true },
   { id: '27', name: 'KOSPI200 야간 선물 지수', ticker: 'KOSPI200_NIGHT' },
-  { id: '28', name: 'CDS 5Y Korea', ticker: 'CDS_KOREA' },
-  { id: '29', name: '외환보유액', ticker: 'FX_RESERVES' },
+  { id: '28', name: 'KOSPI Index & ADR Chart', ticker: 'KOSPI_ADR_CHART' },
+  { id: '29', name: 'CDS 5Y Korea', ticker: 'CDS_KOREA' },
+  { id: '30', name: '외환보유액', ticker: 'FX_RESERVES' },
 ];
 
 async function getFearAndGreed() {
@@ -228,6 +229,9 @@ export async function GET() {
             dataRow.changePercent = null;
             dataRow.history = krxData.kospi_adr.history;
           }
+        } else if (item.ticker === 'KOSPI_ADR_CHART') {
+          dataRow.isLinkOnly = true;
+          dataRow.linkUrl = 'http://adrinfo.kr/chart_indx';
         } else if (item.ticker === 'CDS_KOREA') {
           dataRow.isLinkOnly = true;
           dataRow.linkUrl = 'https://www.indexergo.com/series/?detailId=09201&frq=D';
