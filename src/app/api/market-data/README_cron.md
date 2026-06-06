@@ -22,14 +22,31 @@
 ### Step 1: 실행할 배치 파일 (`run_update.bat`) 작성
 윈도우 스케줄러가 파이썬 환경(가상환경 포함)을 안전하게 구동할 수 있도록 실행용 배치 파일을 생성하는 것이 좋습니다.
 
-프로젝트 루트 또는 `src/app/api/market-data/` 내부에 `run_update.bat` 파일을 다음과 같이 작성합니다. (가상환경이 설치되어 있다면 venv의 python 경로로 대체합니다.)
+프로젝트 루트(`D:\AI Investing\MarketSignal\run_update.bat`)에 아래와 같이 작성하여 데이터 업데이트 및 깃허브 푸시까지 한 번에 자동 처리하도록 합니다. (가상환경이 설치되어 있다면 venv의 python 경로로 대체합니다.)
 
 ```bat
 @echo off
 cd /d "D:\AI Investing\MarketSignal"
-:: 만약 가상환경을 사용한다면 아래 주석을 풀고 가상환경 내 python.exe 경로를 지정하세요.
-:: "D:\AI Investing\MarketSignal\.venv\Scripts\python.exe" "src/app/api/market-data/get_kospi_fundamentals.py"
+
+echo [1/2] Running data scraper and updating cache...
 python "src/app/api/market-data/get_kospi_fundamentals.py"
+
+echo.
+echo [2/2] Pushing updated cache to GitHub...
+git add src/app/api/market-data/krx_cache.json
+git commit -m "Auto-update KRX cache data"
+git push origin main
+
+echo.
+echo Process completed successfully!
+
+:: Pause only if the batch file was run by double-clicking in Explorer
+echo %cmdcmdline% | find /i "cmd.exe /c" >nul
+if %errorlevel% == 0 (
+    echo.
+    echo Press any key to close...
+    pause >nul
+)
 ```
 
 ### Step 2: 윈도우 작업 스케줄러 설정
