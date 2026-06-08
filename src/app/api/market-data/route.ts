@@ -297,7 +297,57 @@ export async function GET() {
             }
 
             const queryOptions = { period1: startDate, period2: endDate, interval: '1d' as const };
-            const result = (await yahooFinance.chart(item.ticker, queryOptions)) as any;
+            let result: any = null;
+            try {
+              result = (await yahooFinance.chart(item.ticker, queryOptions)) as any;
+            } catch (chartErr) {
+              console.error(`Error fetching 1d chart for ${item.ticker}:`, chartErr);
+              console.log(`Attempting 1h chart fallback for ${item.ticker}...`);
+              try {
+                const hourlyResult = (await yahooFinance.chart(item.ticker, { ...queryOptions, interval: '1h' })) as any;
+                if (hourlyResult && hourlyResult.quotes && hourlyResult.quotes.length > 0) {
+                  const dailyGroups: { [key: string]: any[] } = {};
+                  hourlyResult.quotes.forEach((q: any) => {
+                    if (q.close !== null && q.close !== undefined && q.date) {
+                      const dateStr = new Date(q.date).toISOString().split('T')[0];
+                      if (!dailyGroups[dateStr]) {
+                        dailyGroups[dateStr] = [];
+                      }
+                      dailyGroups[dateStr].push(q);
+                    }
+                  });
+
+                  const reconstructedQuotes = Object.keys(dailyGroups).sort().map(dateStr => {
+                    const dayQuotes = dailyGroups[dateStr];
+                    dayQuotes.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                    const first = dayQuotes[0];
+                    const last = dayQuotes[dayQuotes.length - 1];
+                    const open = first.open !== null && first.open !== undefined ? first.open : last.close;
+                    const close = last.close;
+                    let high = last.close;
+                    let low = last.close;
+                    dayQuotes.forEach(q => {
+                      if (q.high !== null && q.high !== undefined) high = Math.max(high, q.high);
+                      if (q.low !== null && q.low !== undefined) low = Math.min(low, q.low);
+                    });
+                    return {
+                      date: new Date(last.date),
+                      open,
+                      high,
+                      low,
+                      close
+                    };
+                  });
+
+                  result = {
+                    ...hourlyResult,
+                    quotes: reconstructedQuotes
+                  };
+                }
+              } catch (fallbackErr) {
+                console.error(`Fallback failed for ${item.ticker}:`, fallbackErr);
+              }
+            }
             
             if (result && result.quotes && result.quotes.length > 0) {
               const validQuotes = result.quotes.map((r: any, idx: number) => {
