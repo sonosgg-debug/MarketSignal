@@ -477,6 +477,66 @@ def task_local_kofia_adr():
 
         # Read & Compute KOSPI ADR(20, %)
         adr_path = r"D:\AI Investing\Daily_Check_K\adv_dec_history.json"
+        
+        # Scrape and update today's KOSPI advance/decline counts first to ensure we have the latest ADR
+        try:
+            headers = {"User-Agent": "Mozilla/5.0"}
+            url = 'https://finance.naver.com/sise/sise_index.naver?code=KOSPI'
+            res = requests.get(url, headers=headers, timeout=5)
+            if res.status_code == 200:
+                soup = BeautifulSoup(res.content.decode('euc-kr', 'replace'), 'html.parser')
+                
+                # 1. Parse date from span id="time"
+                time_span = soup.find('span', id='time')
+                parsed_date = None
+                if time_span:
+                    text = time_span.text.strip()
+                    match = re.search(r'(\d{4})\.(\d{2})\.(\d{2})', text)
+                    if match:
+                        parsed_date = f"{match.group(1)}-{match.group(2)}-{match.group(3)}"
+                
+                # 2. Parse rise/fall counts
+                subtop = soup.find('div', class_='subtop_sise_detail')
+                if subtop and parsed_date:
+                    tbl = subtop.find('table', class_='table_kos_index')
+                    if tbl:
+                        lst_sh = tbl.find('li', class_='lst')
+                        lst_ss = tbl.find('li', class_='lst2')
+                        lst_hr = tbl.find('li', class_='lst4')
+                        lst_hh = tbl.find('li', class_='lst5')
+                        
+                        sanghan = int(lst_sh.find('a').find('span').text.replace(',', '')) if lst_sh else 0
+                        sangseung = int(lst_ss.find('a').find('span').text.replace(',', '')) if lst_ss else 0
+                        harak = int(lst_hr.find('a').find('span').text.replace(',', '')) if lst_hr else 0
+                        hahan = int(lst_hh.find('a').find('span').text.replace(',', '')) if lst_hh else 0
+                        
+                        adv = sanghan + sangseung
+                        dec = harak + hahan
+                        
+                        if adv != 0 or dec != 0:
+                            history = []
+                            if os.path.exists(adr_path):
+                                with open(adr_path, "r", encoding="utf-8") as f:
+                                    history = json.load(f)
+                            
+                            found = False
+                            for item in history:
+                                if item['date'] == parsed_date:
+                                    item['adv'] = adv
+                                    item['dec'] = dec
+                                    found = True
+                                    break
+                            
+                            if not found:
+                                history.append({'date': parsed_date, 'adv': adv, 'dec': dec})
+                            
+                            history.sort(key=lambda x: x['date'])
+                            history = history[-100:]
+                            with open(adr_path, "w", encoding="utf-8") as f:
+                                json.dump(history, f, indent=4)
+        except Exception as adr_up_err:
+            print(f"Error updating ADR history in scraper: {adr_up_err}", file=sys.stderr)
+
         if os.path.exists(adr_path):
             with open(adr_path, "r", encoding="utf-8") as f:
                 adr_data = json.load(f)
