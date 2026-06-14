@@ -2,13 +2,19 @@
 cd /d "D:\AI Investing\MarketSignal"
 
 echo [1/2] Running data scraper and updating cache...
-python "src/app/api/market-data/get_kospi_fundamentals.py"
+python "src/app/api/market-data/get_kospi_fundamentals.py" --batch
 
 echo.
 echo [2/2] Pushing updated cache to GitHub...
 git add src/app/api/market-data/krx_cache.json
-git commit -m "Auto-update KRX cache data"
-git push origin main
+git diff --cached --quiet
+if errorlevel 1 (
+    echo New cache data detected. Committing and pushing...
+    git commit -m "Auto-update KRX cache data"
+    git push origin main
+) else (
+    echo No new cache data to update. Skipping commit/push.
+)
 
 echo.
 echo Process completed successfully!

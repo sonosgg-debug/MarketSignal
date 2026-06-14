@@ -20,6 +20,11 @@ except ImportError:
     print(json.dumps({"error": "pykrx is not installed"}))
     sys.exit(1)
 
+if "--batch" in sys.argv:
+    # Silence stdout but keep stderr for error logging
+    sys.stdout = open(os.devnull, 'w', encoding='utf-8')
+
+
 def format_iso_date(date_str):
     # Convert 'YYYY-MM-DD' or datetime to 'YYYY-MM-DDT00:00:00.000Z'
     if isinstance(date_str, str):
@@ -747,7 +752,8 @@ def main():
         print(json.dumps(result, ensure_ascii=False))
         
     except Exception as e:
-        print(json.dumps({"error": f"Exception occurred: {str(e)}"}))
+        print(json.dumps({"error": f"Exception occurred: {str(e)}"}), file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
