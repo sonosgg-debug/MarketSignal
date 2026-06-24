@@ -1,17 +1,13 @@
 {
   "kospi200_futures": {
-    "price": 1340.4,
-    "changeAmt": -150.1,
-    "changePercent": -10.07,
-    "open": 1504.7,
-    "high": 1505.8,
-    "low": 1324.2,
-    "close": 1340.4,
+    "price": 1381.85,
+    "changeAmt": 41.45,
+    "changePercent": 3.09,
+    "open": 1343.5,
+    "high": 1397.0,
+    "low": 1311.25,
+    "close": 1381.85,
     "history": [
-      {
-        "date": "2026-03-26T00:00:00.000Z",
-        "value": 810.2
-      },
       {
         "date": "2026-03-27T00:00:00.000Z",
         "value": 805.45
@@ -247,6 +243,10 @@
       {
         "date": "2026-06-23T00:00:00.000Z",
         "value": 1340.4
+      },
+      {
+        "date": "2026-06-24T00:00:00.000Z",
+        "value": 1381.85
       }
     ]
   },
@@ -745,14 +745,10 @@
     ]
   },
   "kospi_trade_value": {
-    "price": 614285.86,
-    "changeAmt": 195190.66,
-    "changePercent": 46.57,
+    "price": 554990.71,
+    "changeAmt": -59295.15,
+    "changePercent": -9.65,
     "history": [
-      {
-        "date": "2026-03-26T00:00:00.000Z",
-        "value": 256153.27
-      },
       {
         "date": "2026-03-27T00:00:00.000Z",
         "value": 236593.42
@@ -988,18 +984,18 @@
       {
         "date": "2026-06-23T00:00:00.000Z",
         "value": 614285.86
+      },
+      {
+        "date": "2026-06-24T00:00:00.000Z",
+        "value": 554990.71
       }
     ]
   },
   "kospi_rsi": {
-    "price": 43.52,
-    "changeAmt": -10.87,
-    "changePercent": -19.99,
+    "price": 48.22,
+    "changeAmt": 4.7,
+    "changePercent": 10.8,
     "history": [
-      {
-        "date": "2026-03-26T00:00:00.000Z",
-        "value": 47.2
-      },
       {
         "date": "2026-03-27T00:00:00.000Z",
         "value": 54.89
@@ -1235,18 +1231,18 @@
       {
         "date": "2026-06-23T00:00:00.000Z",
         "value": 43.52
+      },
+      {
+        "date": "2026-06-24T00:00:00.000Z",
+        "value": 48.22
       }
     ]
   },
   "customer_deposits": {
-    "price": 1321857.2,
-    "changeAmt": 28322.65,
-    "changePercent": 2.19,
+    "price": 1368313.67,
+    "changeAmt": 46456.47,
+    "changePercent": 3.51,
     "history": [
-      {
-        "date": "2026-03-25T00:00:00.000Z",
-        "value": 1088498.05
-      },
       {
         "date": "2026-03-26T00:00:00.000Z",
         "value": 1115790.04
@@ -1482,18 +1478,18 @@
       {
         "date": "2026-06-22T00:00:00.000Z",
         "value": 1321857.2
+      },
+      {
+        "date": "2026-06-23T00:00:00.000Z",
+        "value": 1368313.67
       }
     ]
   },
   "credit_balance": {
-    "price": 385311.91,
-    "changeAmt": 525.03,
-    "changePercent": 0.14,
+    "price": 380936.22,
+    "changeAmt": -4375.69,
+    "changePercent": -1.14,
     "history": [
-      {
-        "date": "2026-03-25T00:00:00.000Z",
-        "value": 330285.24
-      },
       {
         "date": "2026-03-26T00:00:00.000Z",
         "value": 327524.16
@@ -1729,18 +1725,18 @@
       {
         "date": "2026-06-22T00:00:00.000Z",
         "value": 385311.91
+      },
+      {
+        "date": "2026-06-23T00:00:00.000Z",
+        "value": 380936.22
       }
     ]
   },
   "margin_call": {
-    "price": 198.91,
-    "changeAmt": -35.88,
-    "changePercent": -15.28,
+    "price": 424.27,
+    "changeAmt": 225.36,
+    "changePercent": 113.3,
     "history": [
-      {
-        "date": "2026-03-25T00:00:00.000Z",
-        "value": 236.18
-      },
       {
         "date": "2026-03-26T00:00:00.000Z",
         "value": 118.2
@@ -1976,18 +1972,18 @@
       {
         "date": "2026-06-22T00:00:00.000Z",
         "value": 198.91
+      },
+      {
+        "date": "2026-06-23T00:00:00.000Z",
+        "value": 424.27
       }
     ]
   },
   "kospi_adr": {
-    "price": 54.66,
-    "changeAmt": -10.5,
-    "changePercent": -16.11,
+    "price": 58.57,
+    "changeAmt": 3.91,
+    "changePercent": 7.15,
     "history": [
-      {
-        "date": "2026-03-26T00:00:00.000Z",
-        "value": 91.56
-      },
       {
         "date": "2026-03-27T00:00:00.000Z",
         "value": 95.88
@@ -2223,13 +2219,17 @@
       {
         "date": "2026-06-23T00:00:00.000Z",
         "value": 54.66
+      },
+      {
+        "date": "2026-06-24T00:00:00.000Z",
+        "value": 58.57
       }
     ]
   },
   "kospi200_night": {
-    "price": 1327.3,
-    "changeAmt": -13.1,
-    "changePercent": -0.98,
+    "price": 1389.3,
+    "changeAmt": 7.45,
+    "changePercent": 0.54,
     "history": [
       {
         "date": "2026-04-24T00:00:00.000Z",
@@ -2429,12 +2429,12 @@
       },
       {
         "date": "2026-06-24T00:00:00.000Z",
-        "value": 1327.3
+        "value": 1389.3
       }
     ],
-    "open": 1339.35,
-    "high": 1380.0,
-    "low": 1316.0,
-    "close": 1327.3
+    "open": 1390.0,
+    "high": 1394.5,
+    "low": 1379.0,
+    "close": 1389.3
   }
 }
