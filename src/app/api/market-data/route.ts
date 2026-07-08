@@ -288,131 +288,169 @@ export async function GET() {
             dataRow.history = krxData.margin_call.history;
           }
         } else {
-          try {
-            let quote: any = null;
+          let fetchedFromNaver = false;
+          if (item.ticker === '^KS11' || item.ticker === '^KQ11') {
             try {
-              quote = (await yahooFinance.quote(item.ticker)) as any;
-            } catch (quoteErr) {
-              console.error(`Error fetching quote for ${item.ticker}:`, quoteErr);
+              const indexSymbol = item.ticker === '^KS11' ? 'KOSPI' : 'KOSDAQ';
+              const res = await fetch(`https://m.stock.naver.com/api/index/${indexSymbol}/price?pageSize=60&page=1`, {
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }
+              });
+              if (res.ok) {
+                const data = (await res.json()) as any[];
+                if (Array.isArray(data) && data.length > 0) {
+                  const latest = data[0];
+                  const price = parseFloat(latest.closePrice.replace(/,/g, ''));
+                  dataRow.price = price;
+                  dataRow.open = parseFloat(latest.openPrice.replace(/,/g, ''));
+                  dataRow.high = parseFloat(latest.highPrice.replace(/,/g, ''));
+                  dataRow.low = parseFloat(latest.lowPrice.replace(/,/g, ''));
+                  dataRow.close = price;
+                  dataRow.changeAmt = parseFloat(latest.compareToPreviousClosePrice.replace(/,/g, ''));
+                  dataRow.changePercent = parseFloat(latest.fluctuationsRatio.replace(/,/g, ''));
+                  
+                  const historyRaw = data.slice().reverse();
+                  dataRow.history = historyRaw.map((r: any) => ({
+                    date: new Date(r.localTradedAt).toISOString(),
+                    value: parseFloat(r.closePrice.replace(/,/g, ''))
+                  }));
+                  
+                  fetchedFromNaver = true;
+                }
+              }
+            } catch (naverErr) {
+              console.error(`Error fetching Naver API for ${item.ticker}, falling back to Yahoo Finance:`, naverErr);
             }
+          }
 
-            const queryOptions = { period1: startDate, period2: endDate, interval: '1d' as const };
-            let result: any = null;
+          if (!fetchedFromNaver) {
             try {
-              result = (await yahooFinance.chart(item.ticker, queryOptions)) as any;
-            } catch (chartErr) {
-              console.error(`Error fetching 1d chart for ${item.ticker}:`, chartErr);
-              console.log(`Attempting 1h chart fallback for ${item.ticker}...`);
+              let quote: any = null;
               try {
-                const hourlyResult = (await yahooFinance.chart(item.ticker, { ...queryOptions, interval: '1h' })) as any;
-                if (hourlyResult && hourlyResult.quotes && hourlyResult.quotes.length > 0) {
-                  const dailyGroups: { [key: string]: any[] } = {};
-                  hourlyResult.quotes.forEach((q: any) => {
-                    if (q.close !== null && q.close !== undefined && q.date) {
-                      const dateStr = new Date(q.date).toISOString().split('T')[0];
-                      if (!dailyGroups[dateStr]) {
-                        dailyGroups[dateStr] = [];
+                quote = (await yahooFinance.quote(item.ticker)) as any;
+              } catch (quoteErr) {
+                console.error(`Error fetching quote for ${item.ticker}:`, quoteErr);
+              }
+
+              const queryOptions = { period1: startDate, period2: endDate, interval: '1d' as const };
+              let result: any = null;
+              try {
+                result = (await yahooFinance.chart(item.ticker, queryOptions)) as any;
+              } catch (chartErr) {
+                console.error(`Error fetching 1d chart for ${item.ticker}:`, chartErr);
+                console.log(`Attempting 1h chart fallback for ${item.ticker}...`);
+                try {
+                  const hourlyResult = (await yahooFinance.chart(item.ticker, { ...queryOptions, interval: '1h' })) as any;
+                  if (hourlyResult && hourlyResult.quotes && hourlyResult.quotes.length > 0) {
+                    const dailyGroups: { [key: string]: any[] } = {};
+                    hourlyResult.quotes.forEach((q: any) => {
+                      if (q.close !== null && q.close !== undefined && q.date) {
+                        const dateStr = new Date(q.date).toISOString().split('T')[0];
+                        if (!dailyGroups[dateStr]) {
+                          dailyGroups[dateStr] = [];
+                        }
+                        dailyGroups[dateStr].push(q);
                       }
-                      dailyGroups[dateStr].push(q);
-                    }
-                  });
-
-                  const reconstructedQuotes = Object.keys(dailyGroups).sort().map(dateStr => {
-                    const dayQuotes = dailyGroups[dateStr];
-                    dayQuotes.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-                    const first = dayQuotes[0];
-                    const last = dayQuotes[dayQuotes.length - 1];
-                    const open = first.open !== null && first.open !== undefined ? first.open : last.close;
-                    const close = last.close;
-                    let high = last.close;
-                    let low = last.close;
-                    dayQuotes.forEach(q => {
-                      if (q.high !== null && q.high !== undefined) high = Math.max(high, q.high);
-                      if (q.low !== null && q.low !== undefined) low = Math.min(low, q.low);
                     });
-                    return {
-                      date: new Date(last.date),
-                      open,
-                      high,
-                      low,
-                      close
-                    };
-                  });
 
-                  result = {
-                    ...hourlyResult,
-                    quotes: reconstructedQuotes
-                  };
+                    const reconstructedQuotes = Object.keys(dailyGroups).sort().map(dateStr => {
+                      const dayQuotes = dailyGroups[dateStr];
+                      dayQuotes.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                      const first = dayQuotes[0];
+                      const last = dayQuotes[dayQuotes.length - 1];
+                      const open = first.open !== null && first.open !== undefined ? first.open : last.close;
+                      const close = last.close;
+                      let high = last.close;
+                      let low = last.close;
+                      dayQuotes.forEach(q => {
+                        if (q.high !== null && q.high !== undefined) high = Math.max(high, q.high);
+                        if (q.low !== null && q.low !== undefined) low = Math.min(low, q.low);
+                      });
+                      return {
+                        date: new Date(last.date),
+                        open,
+                        high,
+                        low,
+                        close
+                      };
+                    });
+
+                    result = {
+                      ...hourlyResult,
+                      quotes: reconstructedQuotes
+                    };
+                  }
+                } catch (fallbackErr) {
+                  console.error(`Fallback failed for ${item.ticker}:`, fallbackErr);
                 }
-              } catch (fallbackErr) {
-                console.error(`Fallback failed for ${item.ticker}:`, fallbackErr);
               }
-            }
-            
-            if (result && result.quotes && result.quotes.length > 0) {
-              const validQuotes = result.quotes.map((r: any, idx: number) => {
-                if (r.close === null && idx === result.quotes.length - 1 && quote && quote.regularMarketPrice) {
-                  return { ...r, close: quote.regularMarketPrice };
-                }
-                return r;
-              }).filter((r: any) => r.close !== null && r.date !== undefined);
               
-              if (validQuotes.length > 0) {
-                const historyClose = validQuotes.map((r: any) => ({
-                  date: r.date.toISOString(),
-                  value: r.close
-                }));
-                dataRow.history = historyClose.slice(-60);
-                
-                const last = validQuotes[validQuotes.length - 1];
-                
-                if (quote) {
-                  dataRow.price = quote.regularMarketPrice ?? last.close;
-                  dataRow.open = quote.regularMarketOpen ?? last.open;
-                  dataRow.high = quote.regularMarketDayHigh ?? last.high;
-                  dataRow.low = quote.regularMarketDayLow ?? last.low;
-                  dataRow.close = quote.regularMarketPrice ?? last.close;
-                  if (quote.regularMarketChange !== undefined) {
-                    dataRow.changeAmt = quote.regularMarketChange;
-                    dataRow.changePercent = quote.regularMarketChangePercent;
-                  } else if (validQuotes.length >= 2) {
-                    const prev = validQuotes[validQuotes.length - 2];
-                    if (dataRow.price !== null && prev.close !== null) {
-                      dataRow.changeAmt = dataRow.price - prev.close;
-                      dataRow.changePercent = (dataRow.changeAmt / prev.close) * 100;
-                    }
+              if (result && result.quotes && result.quotes.length > 0) {
+                const validQuotes = result.quotes.map((r: any, idx: number) => {
+                  if (r.close === null && idx === result.quotes.length - 1 && quote && quote.regularMarketPrice) {
+                    return { ...r, close: quote.regularMarketPrice };
                   }
-                } else {
-                  dataRow.price = last.close;
-                  dataRow.open = last.open;
-                  dataRow.high = last.high;
-                  dataRow.low = last.low;
-                  dataRow.close = last.close;
-                  if (validQuotes.length >= 2) {
-                    const prev = validQuotes[validQuotes.length - 2];
-                    if (last.close !== null && prev.close !== null) {
-                      dataRow.changeAmt = last.close - prev.close;
-                      dataRow.changePercent = (dataRow.changeAmt / prev.close) * 100;
+                  return r;
+                }).filter((r: any) => r.close !== null && r.date !== undefined);
+                
+                if (validQuotes.length > 0) {
+                  const historyClose = validQuotes.map((r: any) => ({
+                    date: r.date.toISOString(),
+                    value: r.close
+                  }));
+                  dataRow.history = historyClose.slice(-60);
+                  
+                  const last = validQuotes[validQuotes.length - 1];
+                  
+                  if (quote) {
+                    dataRow.price = quote.regularMarketPrice ?? last.close;
+                    dataRow.open = quote.regularMarketOpen ?? last.open;
+                    dataRow.high = quote.regularMarketDayHigh ?? last.high;
+                    dataRow.low = quote.regularMarketDayLow ?? last.low;
+                    dataRow.close = quote.regularMarketPrice ?? last.close;
+                    if (quote.regularMarketChange !== undefined) {
+                      dataRow.changeAmt = quote.regularMarketChange;
+                      dataRow.changePercent = quote.regularMarketChangePercent;
+                    } else if (validQuotes.length >= 2) {
+                      const prev = validQuotes[validQuotes.length - 2];
+                      if (dataRow.price !== null && prev.close !== null) {
+                        dataRow.changeAmt = dataRow.price - prev.close;
+                        dataRow.changePercent = (dataRow.changeAmt / prev.close) * 100;
+                      }
+                    }
+                  } else {
+                    dataRow.price = last.close;
+                    dataRow.open = last.open;
+                    dataRow.high = last.high;
+                    dataRow.low = last.low;
+                    dataRow.close = last.close;
+                    if (validQuotes.length >= 2) {
+                      const prev = validQuotes[validQuotes.length - 2];
+                      if (last.close !== null && prev.close !== null) {
+                        dataRow.changeAmt = last.close - prev.close;
+                        dataRow.changePercent = (dataRow.changeAmt / prev.close) * 100;
+                      }
                     }
                   }
                 }
-              }
-            } else {
-               const activeQuote = quote || (await yahooFinance.quote(item.ticker)) as any;
-               if (activeQuote && activeQuote.regularMarketPrice) {
-                 dataRow.price = activeQuote.regularMarketPrice;
-                 dataRow.open = activeQuote.regularMarketOpen || null;
-                 dataRow.high = activeQuote.regularMarketDayHigh || null;
-                 dataRow.low = activeQuote.regularMarketDayLow || null;
-                 dataRow.close = activeQuote.regularMarketPrice;
-                 if (activeQuote.regularMarketPreviousClose) {
-                   dataRow.changeAmt = activeQuote.regularMarketPrice - activeQuote.regularMarketPreviousClose;
-                   dataRow.changePercent = activeQuote.regularMarketChangePercent || ((dataRow.changeAmt / activeQuote.regularMarketPreviousClose) * 100);
+              } else {
+                 const activeQuote = quote || (await yahooFinance.quote(item.ticker)) as any;
+                 if (activeQuote && activeQuote.regularMarketPrice) {
+                   dataRow.price = activeQuote.regularMarketPrice;
+                   dataRow.open = activeQuote.regularMarketOpen || null;
+                   dataRow.high = activeQuote.regularMarketDayHigh || null;
+                   dataRow.low = activeQuote.regularMarketDayLow || null;
+                   dataRow.close = activeQuote.regularMarketPrice;
+                   if (activeQuote.regularMarketPreviousClose) {
+                     dataRow.changeAmt = activeQuote.regularMarketPrice - activeQuote.regularMarketPreviousClose;
+                     dataRow.changePercent = activeQuote.regularMarketChangePercent || ((dataRow.changeAmt / activeQuote.regularMarketPreviousClose) * 100);
+                   }
                  }
-               }
+              }
+            } catch (e) {
+              console.error(`Error fetching ${item.ticker}:`, e);
             }
-          } catch (e) {
-            console.error(`Error fetching ${item.ticker}:`, e);
           }
         }
 
