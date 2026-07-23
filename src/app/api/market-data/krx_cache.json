@@ -2227,9 +2227,9 @@
     ]
   },
   "kospi200_night": {
-    "price": 1121.95,
-    "changeAmt": -10.55,
-    "changePercent": -0.93,
+    "price": 1121.0,
+    "changeAmt": -11.5,
+    "changePercent": -1.02,
     "history": [
       {
         "date": "2026-05-08T00:00:00.000Z",
@@ -2469,12 +2469,12 @@
       },
       {
         "date": "2026-07-24T00:00:00.000Z",
-        "value": 1121.95
+        "value": 1121.0
       }
     ],
     "open": 1136.55,
     "high": 1140.2,
     "low": 1089.55,
-    "close": 1121.95
+    "close": 1121.0
   }
 }
