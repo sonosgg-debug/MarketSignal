@@ -37,6 +37,11 @@ const TICKERS = [
   { id: '28', name: 'KOSPI Index & ADR Chart', ticker: 'KOSPI_ADR_CHART' },
   { id: '29', name: 'CDS 5Y Korea', ticker: 'CDS_KOREA' },
   { id: '30', name: '외환보유액', ticker: 'FX_RESERVES' },
+  { id: '31', name: '삼성전자', ticker: '005930.KS' },
+  { id: '32', name: '삼성전기', ticker: '009150.KS' },
+  { id: '33', name: 'SK스퀘어', ticker: '402340.KS' },
+  { id: '34', name: 'SK하이닉스', ticker: '000660.KS' },
+  { id: '35', name: 'SKHY (ADR)', ticker: 'SKHY' },
 ];
 
 async function getFearAndGreed() {
@@ -457,6 +462,80 @@ export async function GET() {
         return dataRow;
       })
     );
+
+    // Calculate SKHY ADR Premium
+    const skhyResult = results.find(r => r.ticker === 'SKHY');
+    const krwResult = results.find(r => r.ticker === 'KRW=X');
+    const hynixResult = results.find(r => r.ticker === '000660.KS');
+
+    if (skhyResult && krwResult && hynixResult) {
+      const skhyHistory = skhyResult.history || [];
+      const krwHistory = krwResult.history || [];
+      const hynixHistory = hynixResult.history || [];
+
+      // Align dates
+      const allDates = Array.from(new Set([
+        ...skhyHistory.map(h => h.date.split('T')[0]),
+        ...krwHistory.map(h => h.date.split('T')[0]),
+        ...hynixHistory.map(h => h.date.split('T')[0])
+      ])).sort();
+
+      let lastSkhy: number | null = null;
+      let lastKrw: number | null = null;
+      let lastHynix: number | null = null;
+
+      const alignedHistory: { date: string; premiumPrice: number; premiumPercent: number }[] = [];
+
+      for (const dStr of allDates) {
+        const skhyItem = skhyHistory.find(h => h.date.startsWith(dStr));
+        const krwItem = krwHistory.find(h => h.date.startsWith(dStr));
+        const hynixItem = hynixHistory.find(h => h.date.startsWith(dStr));
+
+        if (skhyItem) lastSkhy = skhyItem.value;
+        if (krwItem) lastKrw = krwItem.value;
+        if (hynixItem) lastHynix = hynixItem.value;
+
+        if (lastSkhy !== null && lastKrw !== null && lastHynix !== null) {
+          const premiumPrice = (lastSkhy * lastKrw * 10) - lastHynix;
+          const premiumPercent = (premiumPrice / lastHynix) * 100;
+          alignedHistory.push({
+            date: `${dStr}T00:00:00.000Z`,
+            premiumPrice,
+            premiumPercent
+          });
+        }
+      }
+
+      if (alignedHistory.length >= 2) {
+        const latest = alignedHistory[alignedHistory.length - 1];
+        const previous = alignedHistory[alignedHistory.length - 2];
+
+        const premiumPrice = latest.premiumPrice;
+        const premiumChangeAmt = latest.premiumPrice - previous.premiumPrice;
+        const premiumChangePercent = previous.premiumPrice !== 0 ? (premiumChangeAmt / Math.abs(previous.premiumPrice)) * 100 : 0;
+
+        const premiumRow: IndicatorData = {
+          id: '36',
+          name: 'SKHY ADR Premium',
+          ticker: 'SKHY_ADR_PREMIUM',
+          price: premiumPrice,
+          changeAmt: premiumChangeAmt,
+          changePercent: premiumChangePercent,
+          history: alignedHistory.map(h => ({
+            date: h.date,
+            value: parseFloat(h.premiumPercent.toFixed(2))
+          })).slice(-60),
+          open: null,
+          high: null,
+          low: null,
+          close: null,
+          isNegativeFavorable: false,
+          isOdd: false
+        };
+
+        results.push(premiumRow);
+      }
+    }
     
     return NextResponse.json(results, {
       headers: {

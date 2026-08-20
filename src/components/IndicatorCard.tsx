@@ -116,7 +116,12 @@ export function IndicatorCard({ data, displayIndex }: Props) {
     data.ticker === "KOSPI_TRADE_VALUE" || 
     data.ticker === "CUSTOMER_DEPOSITS" || 
     data.ticker === "CREDIT_BALANCE" || 
-    data.ticker === "MARGIN_CALL";
+    data.ticker === "MARGIN_CALL" ||
+    data.ticker === "005930.KS" ||
+    data.ticker === "009150.KS" ||
+    data.ticker === "402340.KS" ||
+    data.ticker === "000660.KS" ||
+    data.ticker === "SKHY_ADR_PREMIUM";
 
   const fractionDigits = isIntegerOnly ? 0 : 2;
 
@@ -174,10 +179,13 @@ export function IndicatorCard({ data, displayIndex }: Props) {
                   labelStyle={{ color: '#a1a1aa', marginBottom: '4px', fontSize: '11px' }}
                   formatter={(value: any) => {
                     if (typeof value === 'number') {
-                      return [value.toLocaleString(undefined, { 
-                        minimumFractionDigits: fractionDigits, 
-                        maximumFractionDigits: fractionDigits 
-                      }), ""];
+                      const isPremium = data.ticker === 'SKHY_ADR_PREMIUM';
+                      const fd = isPremium ? 2 : fractionDigits;
+                      const formattedValue = value.toLocaleString(undefined, { 
+                        minimumFractionDigits: fd, 
+                        maximumFractionDigits: fd 
+                      });
+                      return [isPremium ? `${formattedValue}%` : formattedValue, ""];
                     }
                     return [value, ""];
                   }}

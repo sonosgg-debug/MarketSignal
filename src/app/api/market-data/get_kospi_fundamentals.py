@@ -9,10 +9,25 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import re
 from dotenv import load_dotenv
+import ssl
+
+# Workaround for SSLEOFError on KRX server (fixes legacy TLS negotiation with Python 3.10+ / OpenSSL 3.0+)
+try:
+    orig_create_default_context = ssl.create_default_context
+    def custom_create_default_context(*args, **kwargs):
+        ctx = orig_create_default_context(*args, **kwargs)
+        ctx.options |= 0x4  # ssl.OP_LEGACY_SERVER_CONNECT
+        return ctx
+    ssl.create_default_context = custom_create_default_context
+except Exception:
+    pass
 
 # Load KRX environment variables
+# Load from workspace root .env first, then fallback to D:\AI Investing\KRXdata\.env
+load_dotenv()
 krx_env_path = r"D:\AI Investing\KRXdata\.env"
-load_dotenv(krx_env_path)
+if os.path.exists(krx_env_path):
+    load_dotenv(krx_env_path)
 
 try:
     from pykrx import stock
@@ -367,56 +382,109 @@ def task_fundamentals(start_date, end_date):
 def task_ohlcv_rsi(start_date, end_date):
     result = {}
     try:
-        df_ohlcv = stock.get_index_ohlcv_by_date(start_date, end_date, "1001")
-        if df_ohlcv is not None and not df_ohlcv.empty:
-            # Find 거래대금 column
-            col_name = None
-            for col in df_ohlcv.columns:
-                if "거래대금" in col:
-                    col_name = col
-                    break
-            if col_name:
-                val_series = df_ohlcv[col_name] / 100000000
-                val_series = val_series[val_series > 0].copy()
-                if len(val_series) >= 2:
-                    val_60 = val_series.tail(60)
-                    history_val = [{"date": format_iso_date(dt), "value": round(float(val), 2)} for dt, val in val_60.items()]
-                    latest_val = round(float(val_series.iloc[-1]), 2)
-                    prev_val = round(float(val_series.iloc[-2]), 2)
-                    val_change = round(latest_val - prev_val, 2)
-                    val_pct = round((val_change / prev_val) * 100, 2) if prev_val != 0 else 0.0
-                    
-                    result["kospi_trade_value"] = {
-                        "price": latest_val,
-                        "changeAmt": val_change,
-                        "changePercent": val_pct,
-                        "history": history_val
-                    }
+        data_list = []
+        headers = {"User-Agent": "Mozilla/5.0"}
+        
+        s_dt = datetime.strptime(start_date, "%Y%m%d")
+        e_dt = datetime.strptime(end_date, "%Y%m%d")
+        
+        def fetch_naver_page(page):
+            url = f"https://finance.naver.com/sise/sise_index_day.naver?code=KOSPI&page={page}"
+            try:
+                res = requests.get(url, headers=headers, timeout=5)
+                if res.status_code == 200:
+                    return res.content
+            except Exception:
+                pass
+            return None
             
-            # KOSPI RSI(14)
-            close_series = df_ohlcv.iloc[:, 3].copy()
-            if len(close_series) >= 15:
-                delta = close_series.diff()
-                gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-                loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-                rs = gain / loss
-                rsi_series = 100 - (100 / (1 + rs))
-                rsi_series = rsi_series.dropna()
+        pages = list(range(1, 16))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            contents = list(executor.map(fetch_naver_page, pages))
+            
+        for content in contents:
+            if not content:
+                continue
+            try:
+                soup = BeautifulSoup(content.decode("euc-kr", "replace"), "html.parser")
+                table = soup.find("table", class_="type_1")
+                if not table:
+                    continue
+                rows = table.find_all("tr")
+                for r in rows:
+                    cols = r.find_all("td")
+                    if len(cols) >= 6:
+                        date_str = cols[0].text.strip()
+                        if not date_str or "." not in date_str:
+                            continue
+                        
+                        try:
+                            date_obj = datetime.strptime(date_str, "%Y.%m.%d")
+                            if not (s_dt <= date_obj <= e_dt):
+                                continue
+                                
+                            close_val = float(cols[1].text.strip().replace(",", ""))
+                            value_val = float(cols[5].text.strip().replace(",", ""))
+                            
+                            data_list.append({
+                                "Date": date_obj,
+                                "Close": close_val,
+                                "Value": value_val
+                            })
+                        except Exception:
+                            pass
+            except Exception:
+                pass
                 
-                if len(rsi_series) >= 2:
-                    rsi_60 = rsi_series.tail(60)
-                    history_rsi = [{"date": format_iso_date(dt), "value": round(float(val), 2)} for dt, val in rsi_60.items()]
-                    latest_rsi = round(float(rsi_series.iloc[-1]), 2)
-                    prev_rsi = round(float(rsi_series.iloc[-2]), 2)
-                    rsi_change = round(latest_rsi - prev_rsi, 2)
-                    rsi_pct = round((rsi_change / prev_rsi) * 100, 2) if prev_rsi != 0 else 0.0
-                    
-                    result["kospi_rsi"] = {
-                        "price": latest_rsi,
-                        "changeAmt": rsi_change,
-                        "changePercent": rsi_pct,
-                        "history": history_rsi
-                    }
+        if not data_list:
+            raise ValueError("No KOSPI data scraped from Naver Finance")
+            
+        df = pd.DataFrame(data_list)
+        df = df.drop_duplicates(subset=["Date"])
+        df = df.set_index("Date")
+        df = df.sort_index()
+        
+        val_series = df["Value"] / 100
+        val_series = val_series[val_series > 0].copy()
+        
+        if len(val_series) >= 2:
+            val_60 = val_series.tail(60)
+            history_val = [{"date": format_iso_date(dt), "value": round(float(val), 2)} for dt, val in val_60.items()]
+            latest_val = round(float(val_series.iloc[-1]), 2)
+            prev_val = round(float(val_series.iloc[-2]), 2)
+            val_change = round(latest_val - prev_val, 2)
+            val_pct = round((val_change / prev_val) * 100, 2) if prev_val != 0 else 0.0
+            
+            result["kospi_trade_value"] = {
+                "price": latest_val,
+                "changeAmt": val_change,
+                "changePercent": val_pct,
+                "history": history_val
+            }
+            
+        close_series = df["Close"].copy()
+        if len(close_series) >= 15:
+            delta = close_series.diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss
+            rsi_series = 100 - (100 / (1 + rs))
+            rsi_series = rsi_series.dropna()
+            
+            if len(rsi_series) >= 2:
+                rsi_60 = rsi_series.tail(60)
+                history_rsi = [{"date": format_iso_date(dt), "value": round(float(val), 2)} for dt, val in rsi_60.items()]
+                latest_rsi = round(float(rsi_series.iloc[-1]), 2)
+                prev_rsi = round(float(rsi_series.iloc[-2]), 2)
+                rsi_change = round(latest_rsi - prev_rsi, 2)
+                rsi_pct = round((rsi_change / prev_rsi) * 100, 2) if prev_rsi != 0 else 0.0
+                
+                result["kospi_rsi"] = {
+                    "price": latest_rsi,
+                    "changeAmt": rsi_change,
+                    "changePercent": rsi_pct,
+                    "history": history_rsi
+                }
     except Exception as e:
         print(f"Error in task_ohlcv_rsi: {e}", file=sys.stderr)
     return result

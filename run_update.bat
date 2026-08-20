@@ -3,6 +3,12 @@ cd /d "D:\AI Investing\MarketSignal"
 
 echo [1/2] Running data scraper and updating cache...
 python "src/app/api/market-data/get_kospi_fundamentals.py" --batch
+if errorlevel 1 (
+    echo.
+    echo ERROR: Python data scraper failed with exit code %errorlevel%.
+    echo Skipping cache update and Git push.
+    goto end
+)
 
 echo.
 echo [2/2] Pushing updated cache to GitHub...
@@ -19,6 +25,7 @@ if errorlevel 1 (
 echo.
 echo Process completed successfully!
 
+:end
 :: Pause only if the batch file was run by double-clicking in Explorer (so the window doesn't close immediately)
 echo %cmdcmdline% | find /i "cmd.exe /c" >nul
 if %errorlevel% == 0 (

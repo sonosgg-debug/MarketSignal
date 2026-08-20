@@ -6,7 +6,18 @@ import { IndicatorCard } from "./IndicatorCard";
 import { Loader2, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 
-const CATEGORIES = ["US Market", "K Market"];
+const CATEGORIES = ["US Market", "K Market", "Semiconductor"];
+
+const US_MARKET_TICKERS = [
+  '^GSPC', '^IXIC', '^TNX', 'CL=F', 'DX-Y.NYB', 'KRW=X', '^SOX', 'EWY', 'NVDA', 'MU', 'SNDK', 'DRAM', 'BTC-USD', '^VIX', 'FEAR_GREED'
+];
+const K_MARKET_TICKERS = [
+  '^KS11', '^KQ11', 'KOSPI200_FUTURES', 'KOSPI_PER', 'KOSPI_PBR', 'KOSPI_RSI', 'ADR_INFO', 'KOSPI_TRADE_VALUE',
+  'CUSTOMER_DEPOSITS', 'CREDIT_BALANCE', 'MARGIN_CALL', 'KOSPI200_NIGHT', 'KOSPI_ADR_CHART', 'CDS_KOREA', 'FX_RESERVES'
+];
+const SEMI_MARKET_TICKERS = [
+  '005930.KS', '009150.KS', '402340.KS', '000660.KS', 'SKHY', 'SKHY_ADR_PREMIUM'
+];
 
 export function Dashboard() {
   const [data, setData] = useState<IndicatorData[]>([]);
@@ -78,29 +89,14 @@ export function Dashboard() {
 
   // 필터링 로직
   const filteredData = data.filter((item) => {
-    const isKMarket = 
-      item.ticker === "^KS11" || 
-      item.ticker === "^KQ11" || 
-      item.ticker === "KOSPI200_FUTURES" || 
-      item.ticker === "KOSPI_PER" || 
-      item.ticker === "KOSPI_PBR" || 
-      item.ticker === "KOSPI_RSI" || 
-      item.ticker === "ADR_INFO" || 
-      item.ticker === "KOSPI_TRADE_VALUE" || 
-      item.ticker === "CUSTOMER_DEPOSITS" || 
-      item.ticker === "CREDIT_BALANCE" || 
-      item.ticker === "MARGIN_CALL" || 
-      item.ticker === "KOSPI200_NIGHT" || 
-      item.ticker === "KOSPI_ADR_CHART" || 
-      item.ticker === "CDS_KOREA" || 
-      item.ticker === "FX_RESERVES";
-    
     if (selectedCategory === "US Market") {
-      return !isKMarket;
+      return US_MARKET_TICKERS.includes(item.ticker);
     } else if (selectedCategory === "K Market") {
-      return isKMarket;
+      return K_MARKET_TICKERS.includes(item.ticker);
+    } else if (selectedCategory === "Semiconductor") {
+      return SEMI_MARKET_TICKERS.includes(item.ticker);
     }
-    return true;
+    return false;
   });
 
   return (
