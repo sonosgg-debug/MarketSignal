@@ -97,6 +97,12 @@ export function Dashboard() {
       return SEMI_MARKET_TICKERS.includes(item.ticker);
     }
     return false;
+  }).sort((a, b) => {
+    let list: string[] = [];
+    if (selectedCategory === "US Market") list = US_MARKET_TICKERS;
+    else if (selectedCategory === "K Market") list = K_MARKET_TICKERS;
+    else if (selectedCategory === "Semiconductor") list = SEMI_MARKET_TICKERS;
+    return list.indexOf(a.ticker) - list.indexOf(b.ticker);
   });
 
   return (
