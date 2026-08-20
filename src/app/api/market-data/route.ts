@@ -42,6 +42,9 @@ const TICKERS = [
   { id: '33', name: 'SK스퀘어', ticker: '402340.KS' },
   { id: '34', name: 'SK하이닉스', ticker: '000660.KS' },
   { id: '35', name: 'SKHY (ADR)', ticker: 'SKHY' },
+  { id: '37', name: '키옥시아', ticker: '285A.T' },
+  { id: '38', name: '무라타', ticker: '6981.T' },
+  { id: '39', name: 'CXMT', ticker: '688825.SS' },
 ];
 
 async function getFearAndGreed() {

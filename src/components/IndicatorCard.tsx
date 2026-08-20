@@ -121,7 +121,9 @@ export function IndicatorCard({ data, displayIndex }: Props) {
     data.ticker === "009150.KS" ||
     data.ticker === "402340.KS" ||
     data.ticker === "000660.KS" ||
-    data.ticker === "SKHY_ADR_PREMIUM";
+    data.ticker === "SKHY_ADR_PREMIUM" ||
+    data.ticker === "285A.T" ||
+    data.ticker === "6981.T";
 
   const fractionDigits = isIntegerOnly ? 0 : 2;
 
